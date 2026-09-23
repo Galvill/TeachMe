@@ -1,5 +1,5 @@
 import { isValidElement, type ComponentProps, type ReactNode } from "react";
-import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "./CodeBlock";
 import Mermaid from "./Mermaid";
@@ -88,7 +88,12 @@ export default function Markdown({ source, baseDir }: Props) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}
-        urlTransform={(url, _key, node) => (node.tagName === "img" ? resolveContentUrl(baseDir, url) : url)}
+        urlTransform={(url, _key, node) => {
+          // Sanitize every URL first (blocks `javascript:` etc, same as react-markdown's own
+          // default) — "leave hrefs as-is" only means "don't rewrite them", not "skip this".
+          const safe = defaultUrlTransform(url);
+          return node.tagName === "img" ? resolveContentUrl(baseDir, safe) : safe;
+        }}
       >
         {source}
       </ReactMarkdown>

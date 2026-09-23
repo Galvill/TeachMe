@@ -81,6 +81,24 @@ describe("Markdown", () => {
     expect(link.getAttribute("rel")).toBe("noreferrer");
   });
 
+  it("drops a javascript: link href", () => {
+    render(<Markdown source="[x](javascript:alert(1))" baseDir="" />);
+    // An anchor with an empty href isn't given the accessible "link" role, so query by text.
+    const link = screen.getByText("x");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).not.toBe("javascript:alert(1)");
+    expect(link.getAttribute("href")).toBe("");
+  });
+
+  it("drops a javascript: image src", () => {
+    render(<Markdown source="![img](javascript:alert(1))" baseDir="lessons/01" />);
+    const img = screen.getByAltText("img") as HTMLImageElement;
+    expect(img.getAttribute("src")).not.toBe("javascript:alert(1)");
+    // React omits the `src` attribute entirely for an empty string (avoids the "reload the
+    // page" browser behavior for a blank img src), so the sanitized value surfaces as null.
+    expect(img.getAttribute("src")).toBeNull();
+  });
+
   it("mermaid failure shows source", async () => {
     mermaidRender.mockRejectedValue(new Error("Parse error on line 1"));
     const source = ["```mermaid", "graph TD", "  a --> b", "```"].join("\n");
