@@ -58,6 +58,9 @@ export type Content = {
   warnings: Issue[];
 };
 
+export type Commit = { sha: string; subject: string };
+export type FileChange = { path: string; status: 'modified' | 'added' | 'deleted' | 'renamed'; newPath: string | null; commits: Commit[] };
+
 export type Attempt = {
   context: "standalone" | `course:${string}`;
   date: string;
