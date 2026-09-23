@@ -181,7 +181,8 @@ only after the code is committed.
   `` See `src/orders/service.ts` → `handlePaymentError()`. `` and says why wrong options are
   wrong when that teaches something.
 - **Multi-select** (more than one `[x]`) only when the prompt says "Select all that apply."
-- **No duplicated content:** link to an existing lesson instead of re-explaining it.
+- **No duplicated content:** link to an existing lesson instead of re-explaining it (relative
+  link to its `.md` file; see "Linking between lessons" in `reference/format.md`).
 - **Diagrams follow `reference/mermaid.md`:** one per concept, ≤ 15 nodes, quoted labels.
 
 ## Common mistakes

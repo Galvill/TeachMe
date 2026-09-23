@@ -108,6 +108,20 @@ flowchart LR
 - Body: GitHub-flavored Markdown. ```` ```mermaid ```` blocks render as diagrams; see
   `mermaid.md`.
 
+### Linking between lessons
+
+Write a normal relative Markdown link to the lesson's `.md` file, resolved from the folder of
+the file containing the link (like images). The app turns it into a link to that lesson:
+
+- Same folder: `[Frontmatter](02-frontmatter.md)`
+- Another section: `[Frontmatter](../02-content-format/02-frontmatter.md)`
+- Top-level page from a section: `[Intro](../01-intro.md)`
+- Another course: `[Setup](../../other-course/01-setup.md)`
+- Anchor: `[Sources](02-frontmatter.md#sources)`
+
+Keep the `NN-` prefixes and `.md`: link to the real file name, not the URL slug. Links to
+other `.md` files (`course.md`, `_section.md`, anything outside `courses/`) are left as-is.
+
 ## 5. `quiz.md`
 
 ```yaml
