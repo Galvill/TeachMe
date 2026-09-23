@@ -28,4 +28,11 @@ function teachmeDevMiddleware(): Plugin {
 
 export default defineConfig({
   plugins: [react(), teachmeDevMiddleware()],
+  build: {
+    // Mermaid/Shiki ship many diagram types and language grammars as lazy
+    // (dynamically imported) chunks; they're only fetched when a page
+    // actually renders a code block or diagram, so their on-disk size isn't
+    // a real regression — just raise the warning threshold above them.
+    chunkSizeWarningLimit: 1700,
+  },
 });

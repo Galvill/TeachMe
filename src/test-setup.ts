@@ -30,6 +30,9 @@ if (typeof document !== "undefined") {
 
   Object.defineProperty(globalThis, "localStorage", { value: new MemoryStorage(), configurable: true, writable: true });
 
+  // jsdom doesn't implement scrollTo; CourseView calls it on navigation.
+  window.scrollTo = () => {};
+
   afterEach(() => {
     cleanup();
   });
