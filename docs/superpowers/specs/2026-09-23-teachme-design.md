@@ -19,19 +19,24 @@ Success: an agent uses the skill on a repo and produces a course + quizzes that 
 `teachme validate`; an engineer runs `teachme` in that repo and works through them, with
 progress persisted; after further commits, `teachme status` + the skill bring content back in sync.
 
-### Constraints and decisions
-
-- Runs locally only; single user; no accounts; no database. All content is Markdown files.
-- Content lives in the documented repo, default folder `.teachme/` (versioned with the code).
-- Progress is stored in `~/.TeachMe/progress.json`.
-- Distributed as a CLI (`teachme`), installed via `npm i -g` / `npm link` from this repo.
-- Mermaid diagrams in Markdown must render.
-- Quiz answers are shipped to the browser (learning tool, not an exam).
-
 ### Out of scope
 
 Search, in-app editing, free-text quiz answers, section nesting deeper than one level,
 multi-user / hosted deployment, inline quiz blocks inside lesson pages.
+
+## Constraints
+
+- Runs locally only; single user; no accounts; no database. All content is Markdown files.
+- Content lives in the documented repo, default folder `.teachme/` (versioned with the code).
+- Progress is stored in `~/.TeachMe/progress.json`; tests override the directory with env `TEACHME_HOME`.
+- Distributed as a CLI (`teachme`), installed via `npm i -g` / `npm link` from this repo; Node >= 20.
+- Server code is plain ESM JavaScript on `node:http`, typed with JSDoc against `shared/types.d.ts`; frontend is TypeScript.
+- API response shapes are declared once in `shared/types.d.ts` and imported by both server and UI.
+- Server binds to `127.0.0.1` only; every path from a request is resolved and must stay inside the content dir.
+- Mermaid diagrams in Markdown must render; a broken diagram never breaks the page.
+- Quiz answers are shipped to the browser: learning tool, not an exam.
+- Content is re-read from disk on every request: no cache, no watcher.
+- Nothing blocks navigation: a failed quiz never prevents moving on.
 
 ## 2. Content format
 
@@ -218,7 +223,7 @@ Dependencies: `gray-matter` (frontmatter), `open` (browser). Frontend: `react`,
 |---|---|---|
 | GET | `/api/catalog` | project name, course summaries (slug, title, description, duration, page count), quiz summaries, errors, warnings |
 | GET | `/api/courses/:slug` | course meta, intro body, TOC: ordered items `{type: 'page'\|'quiz', path, title, section?}` |
-| GET | `/api/courses/:slug/pages/*` | page `{title, body, sources[], prev, next}` (prev/next include quiz items) |
+| GET | `/api/courses/:slug/pages/*` | page `{path, title, body, sources[]}`; prev/next are derived client-side from the TOC so quiz items take part |
 | GET | `/api/quizzes/:slug` | quiz meta, intro, questions (parsed, with correct flags + explanations) |
 | GET | `/api/progress` | progress for this content dir |
 | PUT | `/api/progress` | replace progress for this content dir |
@@ -389,3 +394,9 @@ significant changes in a repo that has `.teachme/` (run the update workflow for 
 - **Smoke:** run `teachme validate` on `skill/teachme-authoring/examples/.teachme`; start the
   server against it and fetch `/api/catalog`.
 - **Dogfood:** use the skill to generate a course about TeachMe itself in this repo's `.teachme/`.
+
+## Delivery plans
+
+- **A, core server** (`docs/superpowers/plans/2026-09-23-teachme-A-core-server.md`): scaffold, content loader, quiz parser, progress store, API, server, `teachme` and `teachme validate`, example content.
+- **B, UI** (`docs/superpowers/plans/2026-09-23-teachme-B-ui.md`): React app — home, course view, quiz runner, Markdown/Mermaid rendering, themes, progress.
+- **C, sync and skill** (`docs/superpowers/plans/2026-09-23-teachme-C-sync-skill.md`): `teachme status`, the `teachme-authoring` skill, README, dogfood course.
