@@ -36,7 +36,7 @@ Run commands from the documented repo's root; `[dir]` defaults to `./.teachme`.
 ```bash
 teachme --help                  # check the CLI is on PATH
 teachme validate [dir]          # errors/warnings; exit 1 on errors
-teachme status [dir] --json     # staleness report from git history; always exit 0
+teachme status [dir] --json     # staleness report; exit 0, or 1 if dir missing / not in git
 teachme [dir]                   # serve the UI (http://127.0.0.1:4321) to view the result
 ```
 
@@ -86,7 +86,9 @@ so committing the content afterwards is fine.
 
 ## Update workflow
 
-1. Run `teachme status --json`. Output shape:
+1. Run `teachme status --json`. It needs a git repo: outside one it prints
+   `teachme status needs a git repository` and exits 1. Without git, treat every course and
+   quiz as `never-synced` (step 2). Output shape:
 
    ```jsonc
    {
