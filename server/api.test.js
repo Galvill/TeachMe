@@ -261,6 +261,94 @@ It does something.
     const literal = await rawGet(baseUrl, "/content/../package.json");
     expect(literal.status).toBe(404);
   });
+
+  it("symlink escape blocked", async () => {
+    const secretPath = path.join(dir, "secret.txt");
+    fs.writeFileSync(secretPath, "shh");
+    fs.symlinkSync(secretPath, path.join(contentDir, "escape.txt"));
+
+    const res = await fetch(`${baseUrl}/content/escape.txt`);
+    expect(res.status).toBe(404);
+  });
+
+  it("unreadable content file returns 404 without crashing the server", async () => {
+    const filePath = path.join(contentDir, "images", "secret.png");
+    fs.writeFileSync(filePath, PNG_BYTES);
+    fs.chmodSync(filePath, 0o000);
+
+    try {
+      const res = await fetch(`${baseUrl}/content/images/secret.png`);
+      expect(res.status).toBe(404);
+    } finally {
+      fs.chmodSync(filePath, 0o644);
+    }
+
+    // The server must still be responsive after a stream error.
+    const followUp = await fetch(`${baseUrl}/api/catalog`);
+    expect(followUp.status).toBe(200);
+  });
+
+  it("put rejects oversized body with a normal 400, not a connection reset", async () => {
+    const bigBody = JSON.stringify({
+      courses: {},
+      quizzes: {},
+      padding: "x".repeat(2 * 1024 * 1024),
+    });
+    expect(bigBody.length).toBeGreaterThan(1024 * 1024);
+
+    const res = await fetch(`${baseUrl}/api/progress`, { method: "PUT", body: bigBody });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Invalid progress" });
+
+    // The server must still be responsive afterwards.
+    const followUp = await fetch(`${baseUrl}/api/catalog`);
+    expect(followUp.status).toBe(200);
+  });
+
+  it("store.get throwing returns 500 instead of crashing", async () => {
+    /** @type {import('../shared/types.js').ProgressStore} */
+    const throwingStore = {
+      get() {
+        throw new Error("boom");
+      },
+      put() {},
+    };
+    const { server: s, baseUrl: url } = await startServer(
+      createHandler({ contentDir, repoRoot: dir, store: throwingStore }),
+    );
+    try {
+      const res = await fetch(`${url}/api/progress`);
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: "Internal error" });
+    } finally {
+      await stopServer(s);
+    }
+  });
+
+  it("store put failure returns 500 without crashing", async () => {
+    /** @type {import('../shared/types.js').ProgressStore} */
+    const throwingStore = {
+      get() {
+        return { courses: {}, quizzes: {} };
+      },
+      put() {
+        throw new Error("boom");
+      },
+    };
+    const { server: s, baseUrl: url } = await startServer(
+      createHandler({ contentDir, repoRoot: dir, store: throwingStore }),
+    );
+    try {
+      const res = await fetch(`${url}/api/progress`, {
+        method: "PUT",
+        body: JSON.stringify({ courses: {}, quizzes: {} }),
+      });
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: "Progress could not be saved" });
+    } finally {
+      await stopServer(s);
+    }
+  });
 });
 
 /**

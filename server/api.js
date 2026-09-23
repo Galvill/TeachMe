@@ -159,8 +159,10 @@ function toQuizDetail(quiz) {
 }
 
 /**
- * Read a request body up to `maxBytes`. Resolves `null` (and destroys the
- * request) if the body exceeds the limit.
+ * Read a request body up to `maxBytes`. Once the body exceeds the limit,
+ * stops buffering (dropping further chunks) but keeps draining the request
+ * so the client's write completes normally instead of the socket being torn
+ * down; resolves `null` once the request ends.
  * @param {IncomingMessage} req
  * @param {number} maxBytes
  * @returns {Promise<Buffer | null>}
@@ -168,7 +170,7 @@ function toQuizDetail(quiz) {
 function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     /** @type {Buffer[]} */
-    const chunks = [];
+    let chunks = [];
     let total = 0;
     let exceeded = false;
 
@@ -177,17 +179,16 @@ function readBody(req, maxBytes) {
       total += chunk.length;
       if (total > maxBytes) {
         exceeded = true;
-        resolve(null);
-        req.destroy();
+        chunks = [];
         return;
       }
       chunks.push(chunk);
     });
     req.on("end", () => {
-      if (!exceeded) resolve(Buffer.concat(chunks));
+      resolve(exceeded ? null : Buffer.concat(chunks));
     });
     req.on("error", (err) => {
-      if (!exceeded) reject(err);
+      reject(err);
     });
   });
 }
@@ -202,13 +203,29 @@ export function createHandler(opts) {
   const contentDir = path.resolve(opts.contentDir);
   const { repoRoot, store } = opts;
 
+  /** Real (symlink-resolved) content dir, computed once; used to reject
+   * `/content/*` requests that escape it via a symlink.
+   * @type {string} */
+  let contentDirReal;
+  try {
+    contentDirReal = fs.realpathSync(contentDir);
+  } catch {
+    contentDirReal = contentDir;
+  }
+
   /**
    * @param {IncomingMessage} req
    * @param {ServerResponse} res
    * @param {() => void} [next]
    */
   return function handler(req, res, next) {
-    void handleRequest(req, res, next);
+    handleRequest(req, res, next).catch(() => {
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "Internal error" });
+      } else {
+        res.destroy();
+      }
+    });
   };
 
   /**
@@ -347,6 +364,14 @@ export function createHandler(opts) {
    * @returns {Promise<void>}
    */
   async function handlePutProgress(req, res) {
+    const declaredLength = Number(req.headers["content-length"]);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PROGRESS_BODY_BYTES) {
+      req.resume(); // drain so the client's write completes instead of an RST
+      res.setHeader("Connection", "close");
+      sendJson(res, 400, { error: "Invalid progress" });
+      return;
+    }
+
     let raw;
     try {
       raw = await readBody(req, MAX_PROGRESS_BODY_BYTES);
@@ -355,6 +380,7 @@ export function createHandler(opts) {
       return;
     }
     if (raw === null) {
+      res.setHeader("Connection", "close");
       sendJson(res, 400, { error: "Invalid progress" });
       return;
     }
@@ -401,9 +427,23 @@ export function createHandler(opts) {
       return;
     }
 
+    // Reject symlinks (or symlinked ancestor directories) that resolve
+    // outside the content dir; text-only containment above can't catch this.
+    let real;
+    try {
+      real = fs.realpathSync(resolved);
+    } catch {
+      sendNotFound(res);
+      return;
+    }
+    if (!real.startsWith(contentDirReal + path.sep)) {
+      sendNotFound(res);
+      return;
+    }
+
     let stat;
     try {
-      stat = fs.statSync(resolved);
+      stat = fs.statSync(real);
     } catch {
       sendNotFound(res);
       return;
@@ -417,6 +457,14 @@ export function createHandler(opts) {
     const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
     res.statusCode = 200;
     res.setHeader("Content-Type", contentType);
-    fs.createReadStream(resolved).pipe(res);
+    const stream = fs.createReadStream(real);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        sendNotFound(res);
+      } else {
+        res.destroy();
+      }
+    });
+    stream.pipe(res);
   }
 }
