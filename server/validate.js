@@ -35,17 +35,37 @@ export function tryReadMarkdown(absPath, relPath, issues) {
 }
 
 /**
+ * Normalize a frontmatter `sources:` value to a list of paths. Missing → [];
+ * a lone string → a one-element list. Anything else that is not a list of
+ * strings records a `sources must be a list of file paths` error and keeps
+ * only the string entries (or [] if none).
+ * @param {unknown} raw
+ * @param {string} file
+ * @param {Issues} issues
+ * @returns {string[]}
+ */
+export function normalizeSources(raw, file, issues) {
+  if (raw == null) return [];
+  if (typeof raw === "string") return [raw];
+  const list = Array.isArray(raw) ? raw : [];
+  /** @type {string[]} */
+  const valid = list.filter((s) => typeof s === "string");
+  if (!Array.isArray(raw) || valid.length !== list.length) {
+    issues.errors.push({ file, message: "sources must be a list of file paths" });
+  }
+  return valid;
+}
+
+/**
  * Warn for each `sources:` entry that does not exist under `repoRoot`.
- * @param {unknown} sources
+ * @param {string[]} sources
  * @param {string} file
  * @param {string} repoRoot
  * @param {Issues} issues
  * @returns {void}
  */
 export function checkSources(sources, file, repoRoot, issues) {
-  if (!Array.isArray(sources)) return;
   for (const src of sources) {
-    if (typeof src !== "string") continue;
     if (!fs.existsSync(path.join(repoRoot, src))) {
       issues.warnings.push({ file, message: `Source not found: ${src}` });
     }

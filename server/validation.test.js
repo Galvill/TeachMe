@@ -174,6 +174,51 @@ describe("loadContent validation", () => {
     expect(content.courses).toHaveLength(1);
   });
 
+  it("loader normalizes string sources", () => {
+    const dir = writeTree({
+      "src/app.ts": "export {};\n",
+      ".teachme/courses/arch/course.md": "---\ntitle: Architecture\n---\nIntro.\n",
+      ".teachme/courses/arch/01-page.md": "---\ntitle: Page\nsources: src/app.ts\n---\nBody.\n",
+      ".teachme/quizzes/final/quiz.md": "---\ntitle: Final\n---\nIntro.\n",
+      ".teachme/quizzes/final/01-q.md":
+        "---\nsources: src/app.ts\n---\nPrompt?\n\n## Options\n- [x] Yes\n- [ ] No\n",
+    });
+
+    const content = loadContent(`${dir}/.teachme`, { repoRoot: dir });
+
+    expect(content.errors).toEqual([]);
+    expect(content.warnings).toEqual([]);
+    expect(content.courses[0].pages["page"].sources).toEqual(["src/app.ts"]);
+    expect(content.quizzes[0].questions[0].sources).toEqual(["src/app.ts"]);
+  });
+
+  it("non-list sources is an error", () => {
+    const dir = writeTree({
+      "src/app.ts": "export {};\n",
+      ".teachme/courses/arch/course.md": "---\ntitle: Architecture\n---\nIntro.\n",
+      ".teachme/courses/arch/01-map.md": "---\ntitle: Map\nsources:\n  a: b\n---\nBody.\n",
+      ".teachme/courses/arch/02-mixed.md":
+        "---\ntitle: Mixed\nsources:\n  - src/app.ts\n  - 42\n---\nBody.\n",
+      ".teachme/quizzes/final/quiz.md": "---\ntitle: Final\n---\nIntro.\n",
+      ".teachme/quizzes/final/01-q.md":
+        "---\nsources: 7\n---\nPrompt?\n\n## Options\n- [x] Yes\n- [ ] No\n",
+    });
+
+    const content = loadContent(`${dir}/.teachme`, { repoRoot: dir });
+
+    for (const file of [
+      "courses/arch/01-map.md",
+      "courses/arch/02-mixed.md",
+      "quizzes/final/01-q.md",
+    ]) {
+      expect(content.errors).toContainEqual({ file, message: "sources must be a list of file paths" });
+    }
+    const pages = content.courses[0].pages;
+    expect(pages["map"].sources).toEqual([]);
+    expect(pages["mixed"].sources).toEqual(["src/app.ts"]);
+    expect(content.quizzes[0].questions[0].sources).toEqual([]);
+  });
+
   it("example content is clean", () => {
     const content = loadContent(examplesContentDir, { repoRoot });
 

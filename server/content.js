@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseQuestion } from "./quizParser.js";
-import { tryReadMarkdown, checkSources, checkMarkdownContent } from "./validate.js";
+import { tryReadMarkdown, normalizeSources, checkSources, checkMarkdownContent } from "./validate.js";
 
 /** @typedef {import('../shared/types.js').Content} Content */
 /** @typedef {import('../shared/types.js').Course} Course */
@@ -126,8 +126,8 @@ function buildPageFields(absPath, contentDir, fallbackSlug, repoRoot, issues) {
   if (!read.ok) return null;
 
   const { title, body } = resolveTitle(read.data.title, read.content, fallbackSlug);
-  const sources = /** @type {string[]} */ (read.data.sources ?? []);
   const file = relPath(absPath, contentDir);
+  const sources = normalizeSources(read.data.sources, file, issues);
 
   checkSources(sources, file, repoRoot, issues);
   checkMarkdownContent(body, path.dirname(absPath), file, issues);
@@ -460,7 +460,7 @@ function loadQuiz(quizDir, contentDir, quizSlug, repoRoot, issues) {
     }
 
     const qTitle = qRead.data.title != null ? String(qRead.data.title) : humanize(slug);
-    const sources = /** @type {string[]} */ (qRead.data.sources ?? []);
+    const sources = normalizeSources(qRead.data.sources, qFile, issues);
 
     checkSources(sources, qFile, repoRoot, issues);
     checkMarkdownContent(parsed.prompt, quizDir, qFile, issues);

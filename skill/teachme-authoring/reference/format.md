@@ -246,6 +246,7 @@ teachme-authoring skill.` and exits 1.
 | `Unknown course "<slug>"` | `course:` in `quiz.md` names no loaded course. |
 | `Duplicate slug "<slug>"` | Two entries in one scope resolve to the same slug. |
 | `passingScore must be a number between 0 and 100` | `passingScore` is not a number in 0–100 (`"70"` and `70%` are invalid). |
+| `sources must be a list of file paths` | `sources:` is not a list of strings (e.g. a mapping, a number, or a list containing a number). The item is kept with only its string entries. A single string is accepted as a one-item list. |
 
 Errors cascade: a quiz dropped for its own error makes every `quiz:` reference to it an
 `Unknown quiz` error. Fix the first error in a chain, then re-run.
