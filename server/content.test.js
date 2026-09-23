@@ -135,10 +135,14 @@ describe("loadContent", () => {
     const dir = writeTree({
       ".teachme/courses/beta/course.md":
         "---\ntitle: Beta course\norder: 2\n---\nIntro.\n",
+      ".teachme/courses/beta/01-page.md": "---\ntitle: Page\n---\nBody.\n",
       ".teachme/courses/alpha/course.md":
         "---\ntitle: Alpha course\norder: 1\n---\nIntro.\n",
+      ".teachme/courses/alpha/01-page.md": "---\ntitle: Page\n---\nBody.\n",
       ".teachme/courses/zeta/course.md": "---\ntitle: Zeta course\n---\nIntro.\n",
+      ".teachme/courses/zeta/01-page.md": "---\ntitle: Page\n---\nBody.\n",
       ".teachme/courses/mu/course.md": "---\ntitle: Mu course\n---\nIntro.\n",
+      ".teachme/courses/mu/01-page.md": "---\ntitle: Page\n---\nBody.\n",
     });
 
     const content = loadContent(`${dir}/.teachme`, { repoRoot: dir });

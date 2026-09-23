@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import matter from "gray-matter";
 import { parseQuestion } from "./quizParser.js";
+import { tryReadMarkdown, checkSources, checkMarkdownContent } from "./validate.js";
 
 /** @typedef {import('../shared/types.js').Content} Content */
 /** @typedef {import('../shared/types.js').Course} Course */
@@ -9,6 +9,8 @@ import { parseQuestion } from "./quizParser.js";
 /** @typedef {import('../shared/types.js').Page} Page */
 /** @typedef {import('../shared/types.js').Question} Question */
 /** @typedef {import('../shared/types.js').TocItem} TocItem */
+/** @typedef {import('../shared/types.js').Issue} Issue */
+/** @typedef {{ errors: Issue[]; warnings: Issue[] }} Issues */
 
 const PREFIX_RE = /^(\d+)-(.+)$/;
 const NUMERIC_PREFIX_RE = /^(\d+)-/;
@@ -84,18 +86,6 @@ function relPath(absPath, contentDir) {
 }
 
 /**
- * @param {string} absPath
- * @returns {{ data: Record<string, unknown>; content: string }}
- */
-function readMarkdown(absPath) {
-  const raw = fs.readFileSync(absPath, "utf8");
-  // gray-matter caches parses by input string; pass {} as options to avoid
-  // stale results across tests/files.
-  const parsed = matter(raw, {});
-  return { data: parsed.data, content: parsed.content };
-}
-
-/**
  * Resolve a page's title: frontmatter title, else a leading `# H1` (which
  * is then removed from the body), else the humanized fallback slug.
  * @param {unknown} frontTitle
@@ -127,13 +117,21 @@ function resolveTitle(frontTitle, rawBody, fallbackSlug) {
  * @param {string} absPath
  * @param {string} contentDir
  * @param {string} fallbackSlug
- * @returns {{ title: string; body: string; sources: string[]; file: string }}
+ * @param {string} repoRoot
+ * @param {Issues} issues
+ * @returns {{ title: string; body: string; sources: string[]; file: string } | null}
  */
-function buildPageFields(absPath, contentDir, fallbackSlug) {
-  const { data, content } = readMarkdown(absPath);
-  const { title, body } = resolveTitle(data.title, content, fallbackSlug);
-  const sources = /** @type {string[]} */ (data.sources ?? []);
+function buildPageFields(absPath, contentDir, fallbackSlug, repoRoot, issues) {
+  const read = tryReadMarkdown(absPath, (p) => relPath(p, contentDir), issues);
+  if (!read.ok) return null;
+
+  const { title, body } = resolveTitle(read.data.title, read.content, fallbackSlug);
+  const sources = /** @type {string[]} */ (read.data.sources ?? []);
   const file = relPath(absPath, contentDir);
+
+  checkSources(sources, file, repoRoot, issues);
+  checkMarkdownContent(body, path.dirname(absPath), file, issues);
+
   return { title, body, sources, file };
 }
 
@@ -142,9 +140,11 @@ function buildPageFields(absPath, contentDir, fallbackSlug) {
  * @param {string} courseDir
  * @param {string} contentDir
  * @param {Map<string, Quiz>} quizzesBySlug
+ * @param {string} repoRoot
+ * @param {Issues} issues
  * @returns {{ toc: TocItem[]; pages: Record<string, Page> }}
  */
-function loadCourseToc(courseDir, contentDir, quizzesBySlug) {
+function loadCourseToc(courseDir, contentDir, quizzesBySlug, repoRoot, issues) {
   /** @type {TocItem[]} */
   const toc = [];
   /** @type {Record<string, Page>} */
@@ -155,19 +155,33 @@ function loadCourseToc(courseDir, contentDir, quizzesBySlug) {
     .filter((d) => d.isDirectory() || (d.isFile() && d.name.endsWith(".md")))
     .sort((a, b) => compareNames(a.name, b.name));
 
+  /** @type {Set<string>} */
+  const topSlugs = new Set();
+
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      const sectionDir = path.join(courseDir, entry.name);
       const sectionSlug = stripPrefix(entry.name);
+      const sectionDir = path.join(courseDir, entry.name);
       const sectionMdPath = path.join(sectionDir, "_section.md");
+
+      if (topSlugs.has(sectionSlug)) {
+        const dupFile = fs.existsSync(sectionMdPath)
+          ? relPath(sectionMdPath, contentDir)
+          : relPath(sectionDir, contentDir);
+        issues.errors.push({ file: dupFile, message: `Duplicate slug "${sectionSlug}"` });
+        continue;
+      }
+      topSlugs.add(sectionSlug);
 
       let sectionTitle = humanize(sectionSlug);
       /** @type {string | null} */
       let sectionQuizRef = null;
       if (fs.existsSync(sectionMdPath)) {
-        const { data } = readMarkdown(sectionMdPath);
-        if (data.title != null) sectionTitle = String(data.title);
-        sectionQuizRef = data.quiz != null ? String(data.quiz) : null;
+        const read = tryReadMarkdown(sectionMdPath, (p) => relPath(p, contentDir), issues);
+        if (read.ok) {
+          if (read.data.title != null) sectionTitle = String(read.data.title);
+          sectionQuizRef = read.data.quiz != null ? String(read.data.quiz) : null;
+        }
       }
 
       const pageEntries = listEntries(sectionDir)
@@ -180,11 +194,24 @@ function loadCourseToc(courseDir, contentDir, quizzesBySlug) {
         )
         .sort((a, b) => compareNames(a.name, b.name));
 
+      /** @type {Set<string>} */
+      const sectionSlugs = new Set();
       for (const pageEntry of pageEntries) {
-        const abs = path.join(sectionDir, pageEntry.name);
         const pageSlug = fileSlug(pageEntry.name);
+        const abs = path.join(sectionDir, pageEntry.name);
+        if (sectionSlugs.has(pageSlug)) {
+          issues.errors.push({
+            file: relPath(abs, contentDir),
+            message: `Duplicate slug "${pageSlug}"`,
+          });
+          continue;
+        }
+        sectionSlugs.add(pageSlug);
+
+        const fields = buildPageFields(abs, contentDir, pageSlug, repoRoot, issues);
+        if (!fields) continue;
+
         const pagePath = `${sectionSlug}/${pageSlug}`;
-        const fields = buildPageFields(abs, contentDir, pageSlug);
         pages[pagePath] = { path: pagePath, ...fields };
         toc.push({
           type: "page",
@@ -194,20 +221,39 @@ function loadCourseToc(courseDir, contentDir, quizzesBySlug) {
         });
       }
 
-      if (sectionQuizRef && quizzesBySlug.has(sectionQuizRef)) {
-        const quiz = /** @type {Quiz} */ (quizzesBySlug.get(sectionQuizRef));
-        toc.push({
-          type: "quiz",
-          path: `_quiz/${sectionQuizRef}`,
-          title: quiz.title,
-          section: sectionTitle,
-          quizSlug: sectionQuizRef,
-        });
+      if (sectionQuizRef) {
+        if (quizzesBySlug.has(sectionQuizRef)) {
+          const quiz = /** @type {Quiz} */ (quizzesBySlug.get(sectionQuizRef));
+          toc.push({
+            type: "quiz",
+            path: `_quiz/${sectionQuizRef}`,
+            title: quiz.title,
+            section: sectionTitle,
+            quizSlug: sectionQuizRef,
+          });
+        } else {
+          issues.errors.push({
+            file: relPath(sectionMdPath, contentDir),
+            message: `Unknown quiz "${sectionQuizRef}"`,
+          });
+        }
       }
     } else {
-      const abs = path.join(courseDir, entry.name);
       const pageSlug = fileSlug(entry.name);
-      const fields = buildPageFields(abs, contentDir, pageSlug);
+      const abs = path.join(courseDir, entry.name);
+
+      if (topSlugs.has(pageSlug)) {
+        issues.errors.push({
+          file: relPath(abs, contentDir),
+          message: `Duplicate slug "${pageSlug}"`,
+        });
+        continue;
+      }
+      topSlugs.add(pageSlug);
+
+      const fields = buildPageFields(abs, contentDir, pageSlug, repoRoot, issues);
+      if (!fields) continue;
+
       pages[pageSlug] = { path: pageSlug, ...fields };
       toc.push({
         type: "page",
@@ -226,33 +272,57 @@ function loadCourseToc(courseDir, contentDir, quizzesBySlug) {
  * @param {string} contentDir
  * @param {string} courseSlug
  * @param {Map<string, Quiz>} quizzesBySlug
+ * @param {string} repoRoot
+ * @param {Issues} issues
  * @returns {Course | null}
  */
-function loadCourse(courseDir, contentDir, courseSlug, quizzesBySlug) {
+function loadCourse(courseDir, contentDir, courseSlug, quizzesBySlug, repoRoot, issues) {
   const courseMdPath = path.join(courseDir, "course.md");
-  if (!fs.existsSync(courseMdPath)) return null;
-
-  const { data, content } = readMarkdown(courseMdPath);
-  const title = data.title != null ? String(data.title) : humanize(courseSlug);
-  const description = /** @type {string} */ (data.description ?? "");
-  const duration = data.duration != null ? String(data.duration) : null;
-  const order = /** @type {number | null} */ (data.order ?? null);
-  const quiz = data.quiz != null ? String(data.quiz) : null;
-  const syncedCommit = data.syncedCommit != null ? String(data.syncedCommit) : null;
-  const intro = content.trim();
   const file = relPath(courseMdPath, contentDir);
 
-  const { toc, pages } = loadCourseToc(courseDir, contentDir, quizzesBySlug);
+  if (!fs.existsSync(courseMdPath)) {
+    issues.errors.push({ file, message: "Missing course.md" });
+    return null;
+  }
 
-  if (quiz && quizzesBySlug.has(quiz)) {
-    const courseQuiz = /** @type {Quiz} */ (quizzesBySlug.get(quiz));
-    toc.push({
-      type: "quiz",
-      path: `_quiz/${quiz}`,
-      title: courseQuiz.title,
-      section: null,
-      quizSlug: quiz,
-    });
+  const read = tryReadMarkdown(courseMdPath, (p) => relPath(p, contentDir), issues);
+  if (!read.ok) return null;
+
+  if (typeof read.data.title !== "string") {
+    issues.errors.push({ file, message: 'Missing required "title"' });
+    return null;
+  }
+
+  const title = read.data.title;
+  const description = /** @type {string} */ (read.data.description ?? "");
+  const duration = read.data.duration != null ? String(read.data.duration) : null;
+  const order = /** @type {number | null} */ (read.data.order ?? null);
+  const quiz = read.data.quiz != null ? String(read.data.quiz) : null;
+  const syncedCommit = read.data.syncedCommit != null ? String(read.data.syncedCommit) : null;
+  const intro = read.content.trim();
+
+  checkMarkdownContent(intro, courseDir, file, issues);
+
+  const { toc, pages } = loadCourseToc(courseDir, contentDir, quizzesBySlug, repoRoot, issues);
+
+  if (Object.keys(pages).length === 0) {
+    issues.errors.push({ file, message: "Course has no pages" });
+    return null;
+  }
+
+  if (quiz) {
+    if (quizzesBySlug.has(quiz)) {
+      const courseQuiz = /** @type {Quiz} */ (quizzesBySlug.get(quiz));
+      toc.push({
+        type: "quiz",
+        path: `_quiz/${quiz}`,
+        title: courseQuiz.title,
+        section: null,
+        quizSlug: quiz,
+      });
+    } else {
+      issues.errors.push({ file, message: `Unknown quiz "${quiz}"` });
+    }
   }
 
   return {
@@ -274,16 +344,18 @@ function loadCourse(courseDir, contentDir, courseSlug, quizzesBySlug) {
  * @param {string} coursesDir
  * @param {string} contentDir
  * @param {Map<string, Quiz>} quizzesBySlug
+ * @param {string} repoRoot
+ * @param {Issues} issues
  * @returns {Course[]}
  */
-function loadCourses(coursesDir, contentDir, quizzesBySlug) {
+function loadCourses(coursesDir, contentDir, quizzesBySlug, repoRoot, issues) {
   const entries = listEntries(coursesDir).filter((d) => d.isDirectory());
 
   /** @type {Course[]} */
   const courses = [];
   for (const entry of entries) {
     const courseDir = path.join(coursesDir, entry.name);
-    const course = loadCourse(courseDir, contentDir, entry.name, quizzesBySlug);
+    const course = loadCourse(courseDir, contentDir, entry.name, quizzesBySlug, repoRoot, issues);
     if (course) courses.push(course);
   }
 
@@ -302,20 +374,48 @@ function loadCourses(coursesDir, contentDir, quizzesBySlug) {
  * @param {string} quizDir
  * @param {string} contentDir
  * @param {string} quizSlug
+ * @param {string} repoRoot
+ * @param {Issues} issues
  * @returns {Quiz | null}
  */
-function loadQuiz(quizDir, contentDir, quizSlug) {
+function loadQuiz(quizDir, contentDir, quizSlug, repoRoot, issues) {
   const quizMdPath = path.join(quizDir, "quiz.md");
-  if (!fs.existsSync(quizMdPath)) return null;
-
-  const { data, content } = readMarkdown(quizMdPath);
-  const title = data.title != null ? String(data.title) : humanize(quizSlug);
-  const description = /** @type {string} */ (data.description ?? "");
-  const passingScore = /** @type {number} */ (data.passingScore ?? 70);
-  const course = data.course != null ? String(data.course) : null;
-  const syncedCommit = data.syncedCommit != null ? String(data.syncedCommit) : null;
-  const intro = content.trim();
   const file = relPath(quizMdPath, contentDir);
+
+  if (!fs.existsSync(quizMdPath)) {
+    issues.errors.push({ file, message: "Missing quiz.md" });
+    return null;
+  }
+
+  const read = tryReadMarkdown(quizMdPath, (p) => relPath(p, contentDir), issues);
+  if (!read.ok) return null;
+
+  if (typeof read.data.title !== "string") {
+    issues.errors.push({ file, message: 'Missing required "title"' });
+    return null;
+  }
+
+  const title = read.data.title;
+
+  let passingScore = 70;
+  if (Object.prototype.hasOwnProperty.call(read.data, "passingScore")) {
+    const value = read.data.passingScore;
+    if (typeof value !== "number" || Number.isNaN(value) || value < 0 || value > 100) {
+      issues.errors.push({
+        file,
+        message: "passingScore must be a number between 0 and 100",
+      });
+      return null;
+    }
+    passingScore = value;
+  }
+
+  const description = /** @type {string} */ (read.data.description ?? "");
+  const course = read.data.course != null ? String(read.data.course) : null;
+  const syncedCommit = read.data.syncedCommit != null ? String(read.data.syncedCommit) : null;
+  const intro = read.content.trim();
+
+  checkMarkdownContent(intro, quizDir, file, issues);
 
   const questionEntries = listEntries(quizDir)
     .filter(
@@ -328,14 +428,40 @@ function loadQuiz(quizDir, contentDir, quizSlug) {
     .sort((a, b) => compareNames(a.name, b.name));
 
   /** @type {Question[]} */
-  const questions = questionEntries.map((entry) => {
-    const abs = path.join(quizDir, entry.name);
-    const { data: qData, content: qBody } = readMarkdown(abs);
+  const questions = [];
+  /** @type {Set<string>} */
+  const seenSlugs = new Set();
+
+  for (const entry of questionEntries) {
     const slug = fileSlug(entry.name);
-    const qTitle = qData.title != null ? String(qData.title) : humanize(slug);
-    const sources = /** @type {string[]} */ (qData.sources ?? []);
-    const parsed = parseQuestion(qBody);
-    return {
+    const abs = path.join(quizDir, entry.name);
+    const qFile = relPath(abs, contentDir);
+
+    if (seenSlugs.has(slug)) {
+      issues.errors.push({ file: qFile, message: `Duplicate slug "${slug}"` });
+      continue;
+    }
+    seenSlugs.add(slug);
+
+    const qRead = tryReadMarkdown(abs, (p) => relPath(p, contentDir), issues);
+    if (!qRead.ok) continue;
+
+    const parsed = parseQuestion(qRead.content);
+    if (parsed.errors.length > 0) {
+      for (const message of parsed.errors) {
+        issues.errors.push({ file: qFile, message });
+      }
+      continue;
+    }
+
+    const qTitle = qRead.data.title != null ? String(qRead.data.title) : humanize(slug);
+    const sources = /** @type {string[]} */ (qRead.data.sources ?? []);
+
+    checkSources(sources, qFile, repoRoot, issues);
+    checkMarkdownContent(parsed.prompt, quizDir, qFile, issues);
+    if (parsed.explanation) checkMarkdownContent(parsed.explanation, quizDir, qFile, issues);
+
+    questions.push({
       prompt: parsed.prompt,
       options: parsed.options,
       multi: parsed.multi,
@@ -343,9 +469,14 @@ function loadQuiz(quizDir, contentDir, quizSlug) {
       slug,
       title: qTitle,
       sources,
-      file: relPath(abs, contentDir),
-    };
-  });
+      file: qFile,
+    });
+  }
+
+  if (questions.length === 0) {
+    issues.errors.push({ file, message: "Quiz has no questions" });
+    return null;
+  }
 
   return {
     slug: quizSlug,
@@ -363,16 +494,18 @@ function loadQuiz(quizDir, contentDir, quizSlug) {
 /**
  * @param {string} quizzesDir
  * @param {string} contentDir
+ * @param {string} repoRoot
+ * @param {Issues} issues
  * @returns {Quiz[]}
  */
-function loadQuizzes(quizzesDir, contentDir) {
+function loadQuizzes(quizzesDir, contentDir, repoRoot, issues) {
   const entries = listEntries(quizzesDir).filter((d) => d.isDirectory());
 
   /** @type {Quiz[]} */
   const quizzes = [];
   for (const entry of entries) {
     const quizDir = path.join(quizzesDir, entry.name);
-    const quiz = loadQuiz(quizDir, contentDir, entry.name);
+    const quiz = loadQuiz(quizDir, contentDir, entry.name, repoRoot, issues);
     if (quiz) quizzes.push(quiz);
   }
 
@@ -381,24 +514,36 @@ function loadQuizzes(quizzesDir, contentDir) {
 }
 
 /**
- * Load a `.teachme/` content folder into the content model. Structural
- * only: no validation. `errors`/`warnings` are always empty; Task 4 fills
- * them in.
+ * Load a `.teachme/` content folder into the content model, validating
+ * against spec §2.8. Broken items are omitted; every violation is reported
+ * as an error or warning rather than thrown.
  * @param {string} contentDir
  * @param {{ repoRoot: string }} opts
  * @returns {Content}
  */
 export function loadContent(contentDir, opts) {
-  void opts; // unused until Task 4
+  const { repoRoot } = opts;
+  /** @type {Issues} */
+  const issues = { errors: [], warnings: [] };
 
   const quizzesDir = path.join(contentDir, "quizzes");
   const coursesDir = path.join(contentDir, "courses");
 
-  const quizzes = fs.existsSync(quizzesDir) ? loadQuizzes(quizzesDir, contentDir) : [];
+  const quizzes = fs.existsSync(quizzesDir)
+    ? loadQuizzes(quizzesDir, contentDir, repoRoot, issues)
+    : [];
   const quizzesBySlug = new Map(quizzes.map((q) => [q.slug, q]));
   const courses = fs.existsSync(coursesDir)
-    ? loadCourses(coursesDir, contentDir, quizzesBySlug)
+    ? loadCourses(coursesDir, contentDir, quizzesBySlug, repoRoot, issues)
     : [];
 
-  return { courses, quizzes, errors: [], warnings: [] };
+  const courseSlugs = new Set(courses.map((c) => c.slug));
+  for (const quiz of quizzes) {
+    if (quiz.course != null && !courseSlugs.has(quiz.course)) {
+      issues.errors.push({ file: quiz.file, message: `Unknown course "${quiz.course}"` });
+      quiz.course = null;
+    }
+  }
+
+  return { courses, quizzes, errors: issues.errors, warnings: issues.warnings };
 }
