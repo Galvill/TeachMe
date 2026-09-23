@@ -58,6 +58,17 @@ describe("createProgressStore", () => {
     expect(fs.readFileSync(path.join(dir, "progress.json.bak"), "utf8")).toBe("{not valid json");
     expect(fs.existsSync(path.join(dir, "progress.json"))).toBe(false);
   });
+
+  it("propagates non-ENOENT read errors instead of treating them as empty", () => {
+    const dir = tmpDir();
+    // Make the progress.json path a directory so reading it fails with EISDIR,
+    // not ENOENT.
+    fs.mkdirSync(path.join(dir, "progress.json"));
+
+    const store = createProgressStore({ dir });
+
+    expect(() => store.get("/repo/.teachme")).toThrow();
+  });
 });
 
 describe("isProjectProgress", () => {

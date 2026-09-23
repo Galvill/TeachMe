@@ -50,8 +50,9 @@ function loadProjects(dir) {
   let raw;
   try {
     raw = fs.readFileSync(file, "utf8");
-  } catch {
-    return {};
+  } catch (err) {
+    if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") return {};
+    throw err;
   }
 
   try {
