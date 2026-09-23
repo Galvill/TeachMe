@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const codeToHtml = vi.fn();
@@ -17,7 +18,7 @@ vi.mock("mermaid", () => ({
   },
 }));
 
-import Markdown, { resolveContentUrl } from "./Markdown";
+import Markdown, { resolveContentUrl, resolveLessonLink } from "./Markdown";
 
 describe("resolveContentUrl", () => {
   it("joins and normalizes a relative path under baseDir", () => {
@@ -40,6 +41,49 @@ describe("resolveContentUrl", () => {
   it("leaves root-relative and fragment URLs untouched", () => {
     expect(resolveContentUrl("lessons/01", "/static/img.png")).toBe("/static/img.png");
     expect(resolveContentUrl("lessons/01", "#section")).toBe("#section");
+  });
+});
+
+describe("resolveLessonLink", () => {
+  const base = "courses/guide/02-content-format";
+
+  it("maps a same-folder lesson link", () => {
+    expect(resolveLessonLink(base, "02-frontmatter.md")).toBe("/courses/guide/content-format/frontmatter");
+    expect(resolveLessonLink(base, "./02-frontmatter.md")).toBe("/courses/guide/content-format/frontmatter");
+  });
+
+  it("maps a cross-section lesson link", () => {
+    expect(resolveLessonLink(base, "../03-server/01-api.md")).toBe("/courses/guide/server/api");
+  });
+
+  it("maps a top-level page link", () => {
+    expect(resolveLessonLink(base, "../01-intro.md")).toBe("/courses/guide/intro");
+    expect(resolveLessonLink("courses/guide", "01-intro.md")).toBe("/courses/guide/intro");
+  });
+
+  it("maps a link into another course", () => {
+    expect(resolveLessonLink(base, "../../other/01-start.md")).toBe("/courses/other/start");
+  });
+
+  it("keeps an anchor", () => {
+    expect(resolveLessonLink(base, "02-frontmatter.md#sources")).toBe(
+      "/courses/guide/content-format/frontmatter#sources",
+    );
+  });
+
+  it("returns null for .md files that are not course pages", () => {
+    expect(resolveLessonLink(base, "../course.md")).toBeNull();
+    expect(resolveLessonLink(base, "_section.md")).toBeNull();
+    expect(resolveLessonLink(base, "../../../README.md")).toBeNull();
+    expect(resolveLessonLink(base, "../../../quizzes/final/01-q.md")).toBeNull();
+    expect(resolveLessonLink(base, "a/b/c.md")).toBeNull();
+  });
+
+  it("returns null for non-.md, absolute and external links", () => {
+    expect(resolveLessonLink(base, "diagram.png")).toBeNull();
+    expect(resolveLessonLink(base, "#heading")).toBeNull();
+    expect(resolveLessonLink(base, "/courses/guide/intro")).toBeNull();
+    expect(resolveLessonLink(base, "https://example.com/x.md")).toBeNull();
   });
 });
 
@@ -79,6 +123,28 @@ describe("Markdown", () => {
     const link = screen.getByRole("link", { name: "ext" });
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noreferrer");
+  });
+
+  it("renders lesson links as client-side router links", () => {
+    function Where() {
+      return <p>at {useLocation().pathname}</p>;
+    }
+    render(
+      <MemoryRouter initialEntries={["/courses/guide/content-format/intro"]}>
+        <Routes>
+          <Route
+            path="/courses/guide/content-format/intro"
+            element={<Markdown source="[Next](02-frontmatter.md) and [Readme](../../../README.md)" baseDir="courses/guide/02-content-format" />}
+          />
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Readme" }).getAttribute("href")).toBe("../../../README.md");
+    const link = screen.getByRole("link", { name: "Next" });
+    expect(link.getAttribute("href")).toBe("/courses/guide/content-format/frontmatter");
+    fireEvent.click(link);
+    expect(screen.getByText("at /courses/guide/content-format/frontmatter")).toBeTruthy();
   });
 
   it("drops a javascript: link href", () => {
