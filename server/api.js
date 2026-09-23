@@ -331,7 +331,7 @@ export function createHandler(opts) {
     }
     const content = loadContent(contentDir, { repoRoot });
     const course = content.courses.find((c) => c.slug === slug);
-    const page = course?.pages[pagePath];
+    const page = course && Object.hasOwn(course.pages, pagePath) ? course.pages[pagePath] : undefined;
     if (!page) {
       sendNotFound(res);
       return;

@@ -197,6 +197,11 @@ It does something.
     expect(page.status).toBe(404);
     expect(await page.json()).toEqual({ error: "Not found" });
 
+    for (const inherited of ["constructor", "__proto__", "toString"]) {
+      const res = await fetch(`${baseUrl}/api/courses/arch/pages/${inherited}`);
+      expect(res.status).toBe(404);
+    }
+
     const quiz = await fetch(`${baseUrl}/api/quizzes/nope`);
     expect(quiz.status).toBe(404);
     expect(await quiz.json()).toEqual({ error: "Not found" });
