@@ -1,6 +1,7 @@
-import { Link, Route, Routes } from "react-router";
+import { Link, Route, Routes, useLocation } from "react-router";
 import { CatalogProvider, useCatalog } from "./catalog";
 import ErrorBanner from "./components/ErrorBanner";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ThemeToggle from "./components/ThemeToggle";
 import CourseView from "./pages/CourseView";
 import Home from "./pages/Home";
@@ -32,17 +33,20 @@ function NotFound() {
 
 function Shell() {
   const catalog = useCatalog();
+  const location = useLocation();
   return (
     <>
       <Header />
       <ErrorBanner errors={catalog.errors} warnings={catalog.warnings} />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/courses/:slug" element={<CourseView />} />
-        <Route path="/courses/:slug/*" element={<CourseView />} />
-        <Route path="/quizzes/:slug" element={<QuizView />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <ErrorBoundary resetKey={location.pathname}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/courses/:slug" element={<CourseView />} />
+          <Route path="/courses/:slug/*" element={<CourseView />} />
+          <Route path="/quizzes/:slug" element={<QuizView />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </ErrorBoundary>
     </>
   );
 }

@@ -55,6 +55,15 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Welcome" })).toBeTruthy();
   });
 
+  it("keeps the header when a page fails to render", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getPage).mockResolvedValue({ ...page, sources: "src/app.ts" as unknown as string[] });
+    renderAt("/courses/basics/01-welcome");
+    expect(await screen.findByText("Something went wrong displaying this page.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /TeachMe/ }).textContent).toBe("TeachMe · acme");
+    vi.mocked(console.error).mockRestore();
+  });
+
   it("shows page not found for unknown routes", async () => {
     renderAt("/nope");
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeTruthy();
