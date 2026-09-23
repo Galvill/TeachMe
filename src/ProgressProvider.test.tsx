@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProgressProvider, useProgress } from "./ProgressProvider";
 
 vi.mock("./api", () => ({
@@ -37,10 +37,6 @@ describe("ProgressProvider", () => {
   beforeEach(() => {
     vi.mocked(getProgress).mockReset();
     vi.mocked(putProgress).mockReset();
-  });
-
-  afterEach(() => {
-    cleanup();
   });
 
   it("failed save shows toast", async () => {
