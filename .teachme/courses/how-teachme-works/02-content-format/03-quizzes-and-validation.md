@@ -42,7 +42,9 @@ two or more `[x]` lines make it one.
 ## Errors vs. warnings
 
 `loadQuiz()` drops a question with any parse error, and drops the quiz if no question
-survives (`Quiz has no questions`). Errors mean "this item is left out of the app".
+survives (`Quiz has no questions`). Errors usually mean "this item is left out of the app".
+Two type errors keep the item: `sources must be a list of file paths` (only the string
+entries are kept) and `syncedCommit must be a quoted string` (treated as never synced).
 
 Warnings mean "this item is shown, but something it points at is missing". They come from
 two helpers in `server/validate.js`:
@@ -65,4 +67,5 @@ code is 1 only when there are errors.
 
 - The parser ignores `## ` headings inside code fences.
 - More than one `[x]` makes a question multi-select.
-- Errors remove items from the app; warnings leave them in and flag missing references.
+- Errors mostly remove items from the app; warnings leave them in and flag missing
+  references.

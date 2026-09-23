@@ -50,7 +50,8 @@ and why editing `.teachme/` never makes content stale.
 ## Output and exit codes
 
 `runStatus()` in `bin/teachme.js` exits 1 with `teachme status needs a git repository`
-outside git. Otherwise it prints `formatStatus(report)`, or the JSON report with `--json`,
+outside git, and with `teachme status needs at least one commit` in a repo with no commits
+(`hasCommits()`). Otherwise it prints `formatStatus(report)`, or the JSON report with `--json`,
 and exits 0 even when content is stale: it is a report, not a check. Tests must not assert
 `ok` for this repo's own course, because every later commit to the files it describes
 legitimately makes it stale.

@@ -3,6 +3,7 @@ title: App shell, catalog and progress state
 sources:
   - src/main.tsx
   - src/App.tsx
+  - src/components/ErrorBoundary.tsx
   - src/catalog.tsx
   - src/ProgressProvider.tsx
   - src/progress.ts
@@ -33,6 +34,11 @@ export default function App() {
 these routes: `/`, `/courses/:slug`, `/courses/:slug/*`, `/quizzes/:slug`, and a `*`
 catch-all that shows "Page not found".
 
+The routes sit inside `ErrorBoundary` (`src/components/ErrorBoundary.tsx`), keyed by the
+current path. If a page throws while rendering, the header stays and the boundary shows
+"Something went wrong displaying this page." with the error message and a **Back to home**
+link; navigating to another path clears it.
+
 ## Catalog
 
 `CatalogProvider` in `src/catalog.tsx` calls `getCatalog()` once in a `useEffect` and keeps a
@@ -45,24 +51,24 @@ courses appear after a browser reload, not live.
 
 `ProgressProvider` in `src/ProgressProvider.tsx` loads progress with `getProgress()`. If
 that fails it starts from an empty `{ courses: {}, quizzes: {} }` and shows the toast
-`Progress could not be loaded`: losing history must not block studying.
+`Progress could not be loaded`: losing history must not block studying. Saving stays off
+until the next reload, so the empty-based state never overwrites the stored progress.
 
 Components change progress only through `update(fn)`:
 
 ```tsx
-const update = useCallback((fn: (p: ProjectProgress) => ProjectProgress) => {
-  setProgress((current) => {
-    const next = fn(current ?? EMPTY_PROGRESS);
-    putProgress(next)
-      .then(() => setSaveError(null))
-      .catch(() => setSaveError(SAVE_ERROR_MESSAGE));
-    return next;
-  });
-}, []);
+const next = fn(latestRef.current ?? EMPTY_PROGRESS);
+latestRef.current = next;
+setProgress(next);
+if (!canSaveRef.current) return;
+dirtyRef.current = true;
+void flush();
 ```
 
-State updates first and the whole object is then sent with `PUT /api/progress`; a failed
-save shows `Progress could not be saved` but keeps the in-memory state.
+State updates first. `flush()` then sends the latest whole object with `PUT /api/progress`,
+one request at a time: changes made while a save is in flight are sent together after it,
+so saves never land out of order and the last write wins. A failed save shows
+`Progress could not be saved` but keeps the in-memory state.
 
 The functions passed to `update` live in `src/progress.ts` and are pure: `markVisited()`
 and `addAttempt()` return a new object and never mutate their input. The same file computes
@@ -72,5 +78,7 @@ attempt, over all TOC items, and `bestAttempt()` picks the highest score ratio.
 ## Key takeaways
 
 - `ProgressProvider` wraps `CatalogProvider`, which wraps the routes.
-- The catalog is fetched once; a failed progress load falls back to empty progress.
+- The catalog is fetched once; a failed progress load falls back to empty progress and
+  disables saving.
+- A render error in a page shows a fallback under the header instead of a blank app.
 - All progress changes go through `update()` with pure helpers from `src/progress.ts`.

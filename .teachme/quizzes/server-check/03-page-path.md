@@ -12,6 +12,6 @@ page path `../../secret`. Why can it never read a file outside the content folde
 - [x] The path is only a key into `course.pages`, not a file path
 
 ## Explanation
-`handleGetPage()` does `course?.pages[pagePath]` on the map the loader built from the real
-folder, and returns 404 for unknown keys. No file is opened with the requested path, so no
+`handleGetPage()` checks `Object.hasOwn(course.pages, pagePath)` on the map the loader built
+from the real folder, and returns 404 for unknown keys. No file is opened with the requested path, so no
 containment check is needed on this route.

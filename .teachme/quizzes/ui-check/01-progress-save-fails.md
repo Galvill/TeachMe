@@ -12,6 +12,6 @@ the learner see?
 - [ ] Nothing visible: the failed request is silently ignored
 
 ## Explanation
-`update()` in `src/ProgressProvider.tsx` sets the new state first, then calls
-`putProgress(next)`; its `.catch` only sets `saveError`, which renders the toast. State is not
-rolled back and navigation is never blocked.
+`update()` in `src/ProgressProvider.tsx` sets the new state first, then `flush()` calls
+`putProgress()` with the latest state; a failure only sets `saveError`, which renders the
+toast. State is not rolled back and navigation is never blocked.

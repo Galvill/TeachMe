@@ -37,10 +37,18 @@ if (typeof read.data.title !== "string") {
 }
 ```
 
-`title: 2024` parses as a number, so it fails this check. Other fields are converted:
-`loadCourse()` turns `duration`, `quiz` and `syncedCommit` into strings with `String(...)`.
-That conversion is why unquoted `syncedCommit` values are dangerous: YAML has already turned
-`12e4567` into a number before `String()` sees it.
+`title: 2024` parses as a number, so it fails this check. Most other fields are converted:
+`loadCourse()` turns `duration` and `quiz` into strings with `String(...)`.
+
+`syncedCommit` is not converted, because YAML has already turned an unquoted `12e4567` into
+`Infinity` (and `0123456` into a number) before the loader sees it. `readSyncedCommit()`
+accepts only a string; anything else records `syncedCommit must be a quoted string`, keeps
+the course or quiz, and treats it as never synced.
+
+`sources:` goes through `normalizeSources()` in `server/validate.js`. A lone string becomes a
+one-item list; anything that is not a list of strings records
+`sources must be a list of file paths` and keeps only the string entries, so the UI always
+gets a `string[]`.
 
 `loadQuiz()` is stricter about `passingScore`. It defaults to `70`, and if the key is present
 it must be a real number from 0 to 100, otherwise the quiz is dropped with
@@ -62,4 +70,5 @@ folder slug.
 
 - Invalid YAML becomes an error on that file; the loader keeps going.
 - Only `course.md` and `quiz.md` require `title`, and it must be a string.
-- `passingScore` is type-checked; most other fields are converted with `String()`.
+- `passingScore`, `syncedCommit` and `sources:` are type-checked; most other fields are
+  converted with `String()`.

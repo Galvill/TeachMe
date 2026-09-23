@@ -8,12 +8,13 @@ Lessons describe code at one moment. To tell which lessons may now be wrong, Tea
 to know which files changed since that moment, including files that were renamed or deleted,
 without the author having to remember anything but a commit sha.
 
-## Three helpers
+## Four helpers
 
 `server/git.js` runs git with `execFileSync("git", args, { cwd: … })`, never through a shell
 string, so paths cannot be interpreted as shell syntax.
 
 - `isGitRepo(dir)`: `git rev-parse --is-inside-work-tree`, false on any failure.
+- `hasCommits(dir)`: `git rev-parse --verify --quiet HEAD`, false in a repo with no commits.
 - `headCommit(repoRoot)`: `git rev-parse --short HEAD`.
 - `changesSince(repoRoot, commit)`: the file changes after `commit` up to HEAD.
 

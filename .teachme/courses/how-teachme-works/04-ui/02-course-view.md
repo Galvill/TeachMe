@@ -56,8 +56,15 @@ Image URLs go through `resolveContentUrl()`, which joins a relative `src` onto t
 folder, clamps `..` at the content root, and returns `/content/<path>`: the route from the
 previous section.
 
-Below each lesson, `SourcesFooter` lists the page's `sources:` as
-`vscode://file/<repoRoot>/<path>` links.
+Links work the same way. `resolveLessonLink()` resolves a relative link ending in `.md`
+(optionally with `#anchor`) against the page's folder; if it lands on
+`courses/<course>/[<NN-section>/]<NN-page>.md`, the link becomes a react-router `<Link>` to
+`/courses/<course>/[<section-slug>/]<page-slug>`, so authors link lessons by file name and
+navigation stays client-side. Other `.md` links are left as-is. Tables are wrapped in a
+`table-scroll` box that scrolls sideways on narrow screens.
+
+Below each lesson, `SourcesFooter` lists the page's `sources:` as `vscode://file/<abs-path>`
+links, turning a Windows repo root's backslashes into forward slashes.
 
 ## Key takeaways
 

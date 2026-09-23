@@ -1,6 +1,6 @@
 ---
 title: Where the TOC is built
-sources: [server/content.js, server/api.js, src/pages/CourseView.tsx]
+sources: [server/content.js, server/api.js, src/pages/CourseView.tsx, src/components/Toc.tsx, src/courseNav.ts]
 ---
 A section's quiz shows up in the sidebar before the section's last page. Where would you look
 for the bug?

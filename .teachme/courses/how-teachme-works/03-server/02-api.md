@@ -23,7 +23,9 @@ an agent can regenerate lessons while the app is open and a reload shows the new
 | `GET /content/*` | `handleGetContentFile()` |
 
 Any other `/api/` path gets a 404 JSON body `{ error: "Not found" }`; any other path is
-passed to `next()`. Each handler calls `loadContent()` itself: there is no cache.
+passed to `next()`. The content routes (catalog, course, page and quiz) each call
+`loadContent()` on every request: there is no cache. The progress and `/content/*` routes
+do not load content at all.
 
 The sequence for opening a lesson:
 
@@ -37,7 +39,7 @@ sequenceDiagram
   A->>H: GET /api/courses/slug/pages/path
   H->>L: loadContent(contentDir)
   L-->>H: Content
-  H->>H: course.pages[pagePath]
+  H->>H: own key pagePath in course.pages?
   H-->>A: 200 page JSON, or 404
   A-->>V: PageDetail, or throws ApiError
 ```
@@ -46,7 +48,14 @@ sequenceDiagram
 
 A page request never touches the file system with the requested path. `handleGetPage()`
 looks the decoded path up as a key in `course.pages`, a map the loader built from the real
-folder. An unknown key is a 404.
+folder, and only accepts the map's own keys:
+
+```js
+const page = course && Object.hasOwn(course.pages, pagePath) ? course.pages[pagePath] : undefined;
+```
+
+An unknown key is a 404, including names inherited from `Object.prototype` such as
+`constructor` or `__proto__`.
 
 `/content/*` does read files by path, so it checks twice. First textually, then after
 resolving symlinks (`handleGetContentFile()`):
@@ -77,7 +86,7 @@ ports on `EADDRINUSE`.
 
 ## Key takeaways
 
-- Every API request reloads content from disk.
-- Page paths are map lookups; only `/content/*` reads files by path, with two containment
+- Every content request (catalog, course, page, quiz) reloads content from disk.
+- Page paths are own-key map lookups; only `/content/*` reads files by path, with two containment
   checks.
 - The server listens on `127.0.0.1` and falls back to `index.html` for client routes.
