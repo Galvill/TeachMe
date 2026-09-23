@@ -73,3 +73,10 @@ export type ProgressStore = {
   get(key: string): ProjectProgress;
   put(key: string, p: ProjectProgress): void;
 };
+
+export type CourseSummary = { slug: string; title: string; description: string; duration: string | null; pageCount: number; quizzes: string[] };
+export type QuizSummary = { slug: string; title: string; description: string; questionCount: number; passingScore: number };
+export type Catalog = { project: string; repoRoot: string; courses: CourseSummary[]; quizzes: QuizSummary[]; errors: Issue[]; warnings: Issue[] };
+export type CourseDetail = Omit<Course, 'pages' | 'file' | 'order' | 'syncedCommit'>;
+export type PageDetail = Page;   // UI needs `file` to resolve relative images
+export type QuizDetail = Omit<Quiz, 'file' | 'syncedCommit' | 'questions'> & { questions: Omit<Question, 'file' | 'sources'>[] };
