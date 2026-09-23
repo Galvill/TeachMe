@@ -57,3 +57,19 @@ export type Content = {
   errors: Issue[];
   warnings: Issue[];
 };
+
+export type Attempt = {
+  context: "standalone" | `course:${string}`;
+  date: string;
+  score: number;
+  total: number;
+  answers: Record<string, number[]>;
+};
+export type ProjectProgress = {
+  courses: Record<string, { visited: string[]; lastPage: string | null }>;
+  quizzes: Record<string, { attempts: Attempt[] }>;
+};
+export type ProgressStore = {
+  get(key: string): ProjectProgress;
+  put(key: string, p: ProjectProgress): void;
+};
