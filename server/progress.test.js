@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProgressStore, isProjectProgress } from "./progress.js";
 
 /**
@@ -12,6 +12,10 @@ function tmpDir() {
 }
 
 describe("createProgressStore", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("roundtrip", () => {
     const dir = tmpDir();
     const store = createProgressStore({ dir });
@@ -57,6 +61,29 @@ describe("createProgressStore", () => {
     expect(store.get("/repo/.teachme")).toEqual({ courses: {}, quizzes: {} });
     expect(fs.readFileSync(path.join(dir, "progress.json.bak"), "utf8")).toBe("{not valid json");
     expect(fs.existsSync(path.join(dir, "progress.json"))).toBe(false);
+  });
+
+  it("writes through a unique temp file", () => {
+    const dir = tmpDir();
+    const store = createProgressStore({ dir });
+    const writeSpy = vi.spyOn(fs, "writeFileSync");
+
+    store.put("/repo/.teachme", { courses: {}, quizzes: {} });
+
+    const tmpPath = String(writeSpy.mock.calls[0][0]);
+    expect(path.basename(tmpPath)).toMatch(new RegExp(`^progress\\.json\\.${process.pid}\\.[0-9a-f]+\\.tmp$`));
+    expect(fs.readdirSync(dir)).toEqual(["progress.json"]);
+  });
+
+  it("removes the temp file when the write fails", () => {
+    const dir = tmpDir();
+    const store = createProgressStore({ dir });
+    vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw new Error("rename failed");
+    });
+
+    expect(() => store.put("/repo/.teachme", { courses: {}, quizzes: {} })).toThrow("rename failed");
+    expect(fs.readdirSync(dir)).toEqual([]);
   });
 
   it("propagates non-ENOENT read errors instead of treating them as empty", () => {

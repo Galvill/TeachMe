@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -106,9 +107,15 @@ export function createProgressStore(opts = {}) {
 
       fs.mkdirSync(dir, { recursive: true });
       const file = progressPath(dir);
-      const tmpFile = `${file}.tmp`;
-      fs.writeFileSync(tmpFile, JSON.stringify({ version: FILE_VERSION, projects }, null, 2));
-      fs.renameSync(tmpFile, file);
+      // Unique per process and write, so two servers never share a temp file.
+      const tmpFile = `${file}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+      try {
+        fs.writeFileSync(tmpFile, JSON.stringify({ version: FILE_VERSION, projects }, null, 2));
+        fs.renameSync(tmpFile, file);
+      } catch (err) {
+        fs.rmSync(tmpFile, { force: true });
+        throw err;
+      }
     },
   };
 }
