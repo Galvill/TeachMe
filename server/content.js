@@ -166,6 +166,22 @@ function readRequiredFrontmatter(mdPath, missingFileMessage, contentDir, issues)
 }
 
 /**
+ * `syncedCommit` must be a string: YAML reads unquoted hex like `1234567` or
+ * `12e4567` as a number. Anything else records an error and is treated as
+ * never synced.
+ * @param {unknown} value
+ * @param {string} file
+ * @param {Issues} issues
+ * @returns {string | null}
+ */
+function readSyncedCommit(value, file, issues) {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  issues.errors.push({ file, message: "syncedCommit must be a quoted string" });
+  return null;
+}
+
+/**
  * Build the TOC and pages map for a single course folder.
  * @param {string} courseDir
  * @param {string} contentDir
@@ -316,7 +332,7 @@ function loadCourse(courseDir, contentDir, courseSlug, quizzesBySlug, repoRoot, 
   const duration = data.duration != null ? String(data.duration) : null;
   const order = /** @type {number | null} */ (data.order ?? null);
   const quiz = data.quiz != null ? String(data.quiz) : null;
-  const syncedCommit = data.syncedCommit != null ? String(data.syncedCommit) : null;
+  const syncedCommit = readSyncedCommit(data.syncedCommit, file, issues);
   const intro = content.trim();
 
   checkMarkdownContent(intro, courseDir, file, issues);
@@ -417,7 +433,7 @@ function loadQuiz(quizDir, contentDir, quizSlug, repoRoot, issues) {
 
   const description = /** @type {string} */ (data.description ?? "");
   const course = data.course != null ? String(data.course) : null;
-  const syncedCommit = data.syncedCommit != null ? String(data.syncedCommit) : null;
+  const syncedCommit = readSyncedCommit(data.syncedCommit, file, issues);
   const intro = content.trim();
 
   checkMarkdownContent(intro, quizDir, file, issues);

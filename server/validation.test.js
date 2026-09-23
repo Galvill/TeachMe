@@ -219,6 +219,28 @@ describe("loadContent validation", () => {
     expect(content.quizzes[0].questions[0].sources).toEqual([]);
   });
 
+  it("unquoted syncedCommit is an error", () => {
+    const dir = writeTree({
+      ".teachme/courses/arch/course.md": "---\ntitle: Architecture\nsyncedCommit: 12e4567\n---\nIntro.\n",
+      ".teachme/courses/arch/01-page.md": "---\ntitle: Page\n---\nBody.\n",
+      ".teachme/quizzes/final/quiz.md": "---\ntitle: Final\nsyncedCommit: 1234567\n---\nIntro.\n",
+      ".teachme/quizzes/final/01-q.md": "Prompt?\n\n## Options\n- [x] Yes\n- [ ] No\n",
+      ".teachme/quizzes/ok/quiz.md": "---\ntitle: Ok\nsyncedCommit: \"abc1234\"\n---\nIntro.\n",
+      ".teachme/quizzes/ok/01-q.md": "Prompt?\n\n## Options\n- [x] Yes\n- [ ] No\n",
+    });
+
+    const content = loadContent(`${dir}/.teachme`, { repoRoot: dir });
+
+    expect(content.errors).toEqual([
+      { file: "quizzes/final/quiz.md", message: "syncedCommit must be a quoted string" },
+      { file: "courses/arch/course.md", message: "syncedCommit must be a quoted string" },
+    ]);
+    expect(content.courses[0].syncedCommit).toBeNull();
+    const bySlug = Object.fromEntries(content.quizzes.map((q) => [q.slug, q]));
+    expect(bySlug.final.syncedCommit).toBeNull();
+    expect(bySlug.ok.syncedCommit).toBe("abc1234");
+  });
+
   it("example content is clean", () => {
     const content = loadContent(examplesContentDir, { repoRoot });
 

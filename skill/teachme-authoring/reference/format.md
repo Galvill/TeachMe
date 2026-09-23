@@ -153,7 +153,8 @@ These two fields drive `teachme status` (staleness detection from git history).
 - `syncedCommit` is allowed on `course.md` and `quiz.md` only. Set it to the output of
   `git rev-parse --short HEAD` at the moment the content matches the code.
 - **Always quote `syncedCommit`.** YAML reads unquoted hex like `1234567`, `0123456` or
-  `12e4567` as a number (`12e4567` becomes `Infinity`), which breaks `teachme status`.
+  `12e4567` as a number (`12e4567` becomes `Infinity`); validation reports
+  `syncedCommit must be a quoted string` and the item is treated as never synced.
 - Pages and questions inherit the `syncedCommit` of their course or quiz. A section quiz
   has its own `syncedCommit` in its own `quiz.md`.
 
@@ -260,6 +261,7 @@ teachme-authoring skill.` and exits 1.
 | `Unknown course "<slug>"` | `course:` in `quiz.md` names no loaded course. |
 | `Duplicate slug "<slug>"` | Two entries in one scope resolve to the same slug. |
 | `passingScore must be a number between 0 and 100` | `passingScore` is not a number in 0–100 (`"70"` and `70%` are invalid). |
+| `syncedCommit must be a quoted string` | `syncedCommit` in `course.md`/`quiz.md` is not a string: unquoted hex like `1234567` or `12e4567` is read as a number. Write `syncedCommit: "1234567"`. The item is kept and treated as never synced. |
 | `sources must be a list of file paths` | `sources:` is not a list of strings (e.g. a mapping, a number, or a list containing a number). The item is kept with only its string entries. A single string is accepted as a one-item list. |
 
 Errors cascade: a quiz dropped for its own error makes every `quiz:` reference to it an
