@@ -136,6 +136,36 @@ function buildPageFields(absPath, contentDir, fallbackSlug, repoRoot, issues) {
 }
 
 /**
+ * Read a `course.md`/`quiz.md` file, requiring both its existence and a
+ * string `title` in frontmatter. Pushes the appropriate error and returns
+ * `null` on any failure: missing file, invalid frontmatter, or missing
+ * title.
+ * @param {string} mdPath
+ * @param {string} missingFileMessage
+ * @param {string} contentDir
+ * @param {Issues} issues
+ * @returns {{ file: string; data: Record<string, unknown>; content: string; title: string } | null}
+ */
+function readRequiredFrontmatter(mdPath, missingFileMessage, contentDir, issues) {
+  const file = relPath(mdPath, contentDir);
+
+  if (!fs.existsSync(mdPath)) {
+    issues.errors.push({ file, message: missingFileMessage });
+    return null;
+  }
+
+  const read = tryReadMarkdown(mdPath, (p) => relPath(p, contentDir), issues);
+  if (!read.ok) return null;
+
+  if (typeof read.data.title !== "string") {
+    issues.errors.push({ file, message: 'Missing required "title"' });
+    return null;
+  }
+
+  return { file, data: read.data, content: read.content, title: read.data.title };
+}
+
+/**
  * Build the TOC and pages map for a single course folder.
  * @param {string} courseDir
  * @param {string} contentDir
@@ -278,28 +308,16 @@ function loadCourseToc(courseDir, contentDir, quizzesBySlug, repoRoot, issues) {
  */
 function loadCourse(courseDir, contentDir, courseSlug, quizzesBySlug, repoRoot, issues) {
   const courseMdPath = path.join(courseDir, "course.md");
-  const file = relPath(courseMdPath, contentDir);
+  const required = readRequiredFrontmatter(courseMdPath, "Missing course.md", contentDir, issues);
+  if (!required) return null;
+  const { file, data, content, title } = required;
 
-  if (!fs.existsSync(courseMdPath)) {
-    issues.errors.push({ file, message: "Missing course.md" });
-    return null;
-  }
-
-  const read = tryReadMarkdown(courseMdPath, (p) => relPath(p, contentDir), issues);
-  if (!read.ok) return null;
-
-  if (typeof read.data.title !== "string") {
-    issues.errors.push({ file, message: 'Missing required "title"' });
-    return null;
-  }
-
-  const title = read.data.title;
-  const description = /** @type {string} */ (read.data.description ?? "");
-  const duration = read.data.duration != null ? String(read.data.duration) : null;
-  const order = /** @type {number | null} */ (read.data.order ?? null);
-  const quiz = read.data.quiz != null ? String(read.data.quiz) : null;
-  const syncedCommit = read.data.syncedCommit != null ? String(read.data.syncedCommit) : null;
-  const intro = read.content.trim();
+  const description = /** @type {string} */ (data.description ?? "");
+  const duration = data.duration != null ? String(data.duration) : null;
+  const order = /** @type {number | null} */ (data.order ?? null);
+  const quiz = data.quiz != null ? String(data.quiz) : null;
+  const syncedCommit = data.syncedCommit != null ? String(data.syncedCommit) : null;
+  const intro = content.trim();
 
   checkMarkdownContent(intro, courseDir, file, issues);
 
@@ -380,26 +398,13 @@ function loadCourses(coursesDir, contentDir, quizzesBySlug, repoRoot, issues) {
  */
 function loadQuiz(quizDir, contentDir, quizSlug, repoRoot, issues) {
   const quizMdPath = path.join(quizDir, "quiz.md");
-  const file = relPath(quizMdPath, contentDir);
-
-  if (!fs.existsSync(quizMdPath)) {
-    issues.errors.push({ file, message: "Missing quiz.md" });
-    return null;
-  }
-
-  const read = tryReadMarkdown(quizMdPath, (p) => relPath(p, contentDir), issues);
-  if (!read.ok) return null;
-
-  if (typeof read.data.title !== "string") {
-    issues.errors.push({ file, message: 'Missing required "title"' });
-    return null;
-  }
-
-  const title = read.data.title;
+  const required = readRequiredFrontmatter(quizMdPath, "Missing quiz.md", contentDir, issues);
+  if (!required) return null;
+  const { file, data, content, title } = required;
 
   let passingScore = 70;
-  if (Object.prototype.hasOwnProperty.call(read.data, "passingScore")) {
-    const value = read.data.passingScore;
+  if (Object.prototype.hasOwnProperty.call(data, "passingScore")) {
+    const value = data.passingScore;
     if (typeof value !== "number" || Number.isNaN(value) || value < 0 || value > 100) {
       issues.errors.push({
         file,
@@ -410,10 +415,10 @@ function loadQuiz(quizDir, contentDir, quizSlug, repoRoot, issues) {
     passingScore = value;
   }
 
-  const description = /** @type {string} */ (read.data.description ?? "");
-  const course = read.data.course != null ? String(read.data.course) : null;
-  const syncedCommit = read.data.syncedCommit != null ? String(read.data.syncedCommit) : null;
-  const intro = read.content.trim();
+  const description = /** @type {string} */ (data.description ?? "");
+  const course = data.course != null ? String(data.course) : null;
+  const syncedCommit = data.syncedCommit != null ? String(data.syncedCommit) : null;
+  const intro = content.trim();
 
   checkMarkdownContent(intro, quizDir, file, issues);
 
