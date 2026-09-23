@@ -138,15 +138,21 @@ function emptyItem(kind, entity) {
 }
 
 /**
- * @param {Course} course
+ * Build a `StatusItem` for one course or quiz. Courses and quizzes share
+ * everything here except which children (`pages`/`questions`) get scanned
+ * and whether `uncovered` is computed (courses only) — that's captured by
+ * `children` and the optional `computeUncoveredFor` callback.
+ * @param {'course' | 'quiz'} kind
+ * @param {{ slug: string; file: string; syncedCommit: string | null }} entity
+ * @param {{ file: string; title: string; sources: string[] }[]} children
  * @param {(commit: string) => FileChange[]} getChanges
- * @param {string} contentDirRel
+ * @param {(changes: FileChange[], referenced: Set<string>) => StatusItem['uncovered']} [computeUncoveredFor]
  * @returns {StatusItem}
  */
-function buildCourseItem(course, getChanges, contentDirRel) {
-  const item = emptyItem("course", course);
+function buildItem(kind, entity, children, getChanges, computeUncoveredFor) {
+  const item = emptyItem(kind, entity);
 
-  if (course.syncedCommit == null) {
+  if (entity.syncedCommit == null) {
     item.state = "never-synced";
     return item;
   }
@@ -154,7 +160,7 @@ function buildCourseItem(course, getChanges, contentDirRel) {
   /** @type {FileChange[]} */
   let changes;
   try {
-    changes = getChanges(course.syncedCommit);
+    changes = getChanges(entity.syncedCommit);
   } catch (err) {
     if (err instanceof UnknownCommitError) {
       item.state = "unknown-commit";
@@ -167,13 +173,15 @@ function buildCourseItem(course, getChanges, contentDirRel) {
   /** @type {Set<string>} */
   const referenced = new Set();
 
-  for (const page of Object.values(course.pages)) {
-    const { stale, broken } = collectEntityChanges(page, changesByPath, referenced);
+  for (const child of children) {
+    const { stale, broken } = collectEntityChanges(child, changesByPath, referenced);
     if (stale) item.stale.push(stale);
     item.broken.push(...broken);
   }
 
-  item.uncovered = computeUncovered(changes, referenced, contentDirRel);
+  if (computeUncoveredFor) {
+    item.uncovered = computeUncoveredFor(changes, referenced);
+  }
 
   if (item.stale.length > 0 || item.broken.length > 0 || item.uncovered.length > 0) {
     item.state = "stale";
@@ -183,45 +191,24 @@ function buildCourseItem(course, getChanges, contentDirRel) {
 }
 
 /**
+ * @param {Course} course
+ * @param {(commit: string) => FileChange[]} getChanges
+ * @param {string} contentDirRel
+ * @returns {StatusItem}
+ */
+function buildCourseItem(course, getChanges, contentDirRel) {
+  return buildItem("course", course, Object.values(course.pages), getChanges, (changes, referenced) =>
+    computeUncovered(changes, referenced, contentDirRel),
+  );
+}
+
+/**
  * @param {Quiz} quiz
  * @param {(commit: string) => FileChange[]} getChanges
  * @returns {StatusItem}
  */
 function buildQuizItem(quiz, getChanges) {
-  const item = emptyItem("quiz", quiz);
-
-  if (quiz.syncedCommit == null) {
-    item.state = "never-synced";
-    return item;
-  }
-
-  /** @type {FileChange[]} */
-  let changes;
-  try {
-    changes = getChanges(quiz.syncedCommit);
-  } catch (err) {
-    if (err instanceof UnknownCommitError) {
-      item.state = "unknown-commit";
-      return item;
-    }
-    throw err;
-  }
-
-  const changesByPath = new Map(changes.map((c) => [c.path, c]));
-  /** @type {Set<string>} */
-  const referenced = new Set();
-
-  for (const question of quiz.questions) {
-    const { stale, broken } = collectEntityChanges(question, changesByPath, referenced);
-    if (stale) item.stale.push(stale);
-    item.broken.push(...broken);
-  }
-
-  if (item.stale.length > 0 || item.broken.length > 0) {
-    item.state = "stale";
-  }
-
-  return item;
+  return buildItem("quiz", quiz, quiz.questions, getChanges);
 }
 
 /**
