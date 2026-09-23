@@ -56,6 +56,23 @@ export function isGitRepo(dir) {
 }
 
 /**
+ * Whether the repo containing `dir` has at least one commit (HEAD resolves).
+ * @param {string} dir
+ * @returns {boolean}
+ */
+export function hasCommits(dir) {
+  try {
+    execFileSync("git", ["rev-parse", "--verify", "--quiet", "HEAD"], {
+      cwd: dir,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Short sha of HEAD.
  * @param {string} repoRoot
  * @returns {string}

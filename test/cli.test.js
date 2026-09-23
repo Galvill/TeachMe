@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -98,6 +98,19 @@ describe("teachme status", () => {
 
     const { code, stdout, stderr } = await run(["status", contentDir]);
     expect(stderr).toBe("teachme status needs a git repository\n");
+    expect(stdout).toBe("");
+    expect(code).toBe(1);
+  });
+  it("repository without commits exits 1", async () => {
+    const dir = writeTree({
+      ".teachme/courses/arch/course.md": "---\ntitle: Architecture\n---\nIntro.\n",
+      ".teachme/courses/arch/01-setup.md": "---\ntitle: Setup\n---\nBody.\n",
+    });
+    execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+    const contentDir = path.join(dir, ".teachme");
+
+    const { code, stdout, stderr } = await run(["status", contentDir]);
+    expect(stderr).toBe("teachme status needs at least one commit\n");
     expect(stdout).toBe("");
     expect(code).toBe(1);
   });

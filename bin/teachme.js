@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import open from "open";
 import { loadContent } from "../server/content.js";
-import { isGitRepo, resolveRepoRoot } from "../server/git.js";
+import { hasCommits, isGitRepo, resolveRepoRoot } from "../server/git.js";
 import { formatIssues, startServer } from "../server/serve.js";
 import { buildStatus, formatStatus } from "../server/status.js";
 
@@ -75,6 +75,12 @@ function runStatus(dir, options) {
 
   if (!isGitRepo(absDir)) {
     process.stderr.write("teachme status needs a git repository\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!hasCommits(absDir)) {
+    process.stderr.write("teachme status needs at least one commit\n");
     process.exitCode = 1;
     return;
   }
