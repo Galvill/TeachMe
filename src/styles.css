@@ -481,6 +481,10 @@ button {
   padding-top: var(--space-6);
 }
 
+.course-main h1 + .prose {
+  margin-top: var(--space-4);
+}
+
 .breadcrumb {
   margin-bottom: var(--space-5);
   font-size: var(--text-sm);
@@ -644,12 +648,15 @@ button {
   font-size: inherit;
 }
 
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .prose table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
-  display: block;
-  overflow-x: auto;
 }
 
 .prose th,

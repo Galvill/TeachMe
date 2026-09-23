@@ -108,6 +108,17 @@ function Pre({ children }: PreProps) {
   return <pre>{children}</pre>;
 }
 
+type TableProps = ComponentProps<"table"> & ExtraProps;
+
+/** Tables scroll horizontally inside their own box instead of overflowing narrow screens. */
+function Table({ node: _node, ...props }: TableProps) {
+  return (
+    <div className="table-scroll">
+      <table {...props} />
+    </div>
+  );
+}
+
 type AProps = ComponentProps<"a"> & ExtraProps;
 
 /**
@@ -140,7 +151,7 @@ function makeA(baseDir: string) {
  * enabled (no rehype-raw) since content may come from anywhere on disk.
  */
 export default function Markdown({ source, baseDir }: Props) {
-  const components = useMemo<Components>(() => ({ pre: Pre, a: makeA(baseDir) }), [baseDir]);
+  const components = useMemo<Components>(() => ({ pre: Pre, table: Table, a: makeA(baseDir) }), [baseDir]);
   return (
     <div className="prose">
       <ReactMarkdown

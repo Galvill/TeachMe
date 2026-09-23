@@ -106,6 +106,14 @@ describe("Markdown", () => {
     expect(screen.getByRole("cell", { name: "1" })).toBeTruthy();
   });
 
+  it("wraps tables in a horizontal scroll container", () => {
+    const source = ["| A | B |", "| --- | --- |", "| 1 | 2 |"].join("\n");
+    render(<Markdown source={source} baseDir="" />);
+    const wrapper = screen.getByRole("table").parentElement;
+    expect(wrapper?.tagName).toBe("DIV");
+    expect(wrapper?.className).toBe("table-scroll");
+  });
+
   it("rewrites relative image", () => {
     render(<Markdown source="![alt text](img.png)" baseDir="lessons/01" />);
     const img = screen.getByRole("img", { name: "alt text" }) as HTMLImageElement;
