@@ -33,6 +33,32 @@ function TestConsumer() {
   );
 }
 
+let nextId = 0;
+
+function SeqConsumer() {
+  const { update } = useProgress();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        nextId += 1;
+        const id = `c${nextId}`;
+        update((p) => ({ ...p, courses: { ...p.courses, [id]: { visited: [], lastPage: null } } }));
+      }}
+    >
+      add
+    </button>
+  );
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 describe("ProgressProvider", () => {
   beforeEach(() => {
     vi.mocked(getProgress).mockReset();
@@ -117,5 +143,62 @@ describe("ProgressProvider", () => {
       await Promise.resolve();
     });
     expect(screen.queryByTestId("save-error")).toBeNull();
+  });
+
+  it("serializes saves so only one is in flight and the last write wins", async () => {
+    nextId = 0;
+    vi.mocked(getProgress).mockResolvedValue({ courses: {}, quizzes: {} });
+    const first = deferred();
+    const second = deferred();
+    vi.mocked(putProgress).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    render(
+      <ProgressProvider>
+        <SeqConsumer />
+      </ProgressProvider>,
+    );
+
+    const button = await screen.findByText("add");
+    await act(async () => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+
+    expect(putProgress).toHaveBeenCalledTimes(1);
+    expect(Object.keys(vi.mocked(putProgress).mock.calls[0][0].courses)).toEqual(["c1"]);
+
+    await act(async () => {
+      first.resolve();
+    });
+
+    expect(putProgress).toHaveBeenCalledTimes(2);
+    expect(Object.keys(vi.mocked(putProgress).mock.calls[1][0].courses)).toEqual(["c1", "c2", "c3"]);
+
+    await act(async () => {
+      second.resolve();
+    });
+    expect(putProgress).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not save after the initial load fails", async () => {
+    vi.mocked(getProgress).mockRejectedValue(new Error("boom"));
+    vi.mocked(putProgress).mockResolvedValue(undefined);
+
+    render(
+      <ProgressProvider>
+        <TestConsumer />
+      </ProgressProvider>,
+    );
+
+    const button = await screen.findByText("visit");
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+
+    expect(putProgress).not.toHaveBeenCalled();
+    expect(screen.getByTestId("visited-count").textContent).toBe("1");
+    expect(screen.getByText("Progress could not be loaded")).toBeTruthy();
   });
 });
