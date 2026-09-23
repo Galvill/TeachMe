@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { writeTree } from "./helpers.js";
 import { startServer } from "../server/serve.js";
 
@@ -160,6 +161,46 @@ describe("startServer", () => {
       const text = await res.text();
       expect(text).toBe('TeachMe UI is not built. Run "npm run build".');
     } finally {
+      await close();
+    }
+  });
+
+  it("survives a server-level error after startup", async () => {
+    const distDir = writeTree({
+      "index.html": "<!doctype html><html><body>TeachMe UI</body></html>",
+    });
+
+    // Capture the underlying http.Server that startServer() creates
+    // internally (its public return value only exposes { url, close }), so
+    // we can simulate a post-startup, server-level error (e.g. EMFILE during
+    // accept) the same way Node would emit one.
+    const createServerSpy = vi.spyOn(http, "createServer");
+    const { url, close } = await startServer({
+      contentDir: exampleContentDir,
+      repoRoot,
+      distDir,
+      port: 0,
+    });
+    const server = createServerSpy.mock.results[0].value;
+    createServerSpy.mockRestore();
+
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    try {
+      // If serve.js didn't keep a persistent 'error' listener on the server,
+      // this emit would throw (an unhandled 'error' event on an
+      // EventEmitter crashes the process) and fail the test.
+      server.emit("error", new Error("simulated accept error"));
+
+      expect(stderrSpy).toHaveBeenCalledWith(
+        "TeachMe server error: simulated accept error\n",
+      );
+
+      // The server must still be usable after the error.
+      const res = await fetch(`${url}/api/catalog`);
+      expect(res.status).toBe(200);
+    } finally {
+      stderrSpy.mockRestore();
       await close();
     }
   });

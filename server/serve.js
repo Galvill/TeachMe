@@ -231,6 +231,14 @@ export async function startServer(opts) {
 
   const port = await listenWithRetry(server, opts.port);
 
+  // Persistent listener: after startup, a server-level error (e.g. EMFILE
+  // during accept) must not crash the process, per spec §8 ("Nothing blocks
+  // navigation") — an unhandled `error` event on an EventEmitter otherwise
+  // throws.
+  server.on("error", (err) => {
+    process.stderr.write(`TeachMe server error: ${err instanceof Error ? err.message : String(err)}\n`);
+  });
+
   return {
     url: `http://${HOST}:${port}`,
     close() {
