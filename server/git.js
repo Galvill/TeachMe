@@ -221,7 +221,14 @@ function aggregateChanges(commitsNewestFirst) {
           recordCommit(startLineage(change.path, change.newPath, false), commit);
         }
       } else if (change.type === "A") {
-        recordCommit(startLineage(change.path, change.path, true), commit);
+        // A re-add at a path whose lineage we're already tracking (it was
+        // deleted earlier in the range) continues that lineage rather than
+        // starting a new one, so a delete-then-re-add nets out to a single
+        // entry for the path.
+        const existing = byCurrentPath.get(change.path);
+        const lineage = existing ?? startLineage(change.path, change.path, true);
+        lineage.deleted = false;
+        recordCommit(lineage, commit);
       } else if (change.type === "D") {
         const existing = byCurrentPath.get(change.path);
         const lineage = existing ?? startLineage(change.path, change.path, false);

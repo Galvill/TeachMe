@@ -88,6 +88,27 @@ describe("changesSince", () => {
     ]);
   });
 
+  it("delete then re-add is modified", () => {
+    const repo = makeRepo({ "a.md": "a\n" });
+    const base = headCommit(repo.dir);
+    const c1 = repo.commit({ "a.md": null }, "delete a");
+    const c2 = repo.commit({ "a.md": "a\nagain\n" }, "re-add a");
+
+    const changes = changesSince(repo.dir, base);
+
+    expect(changes).toEqual([
+      {
+        path: "a.md",
+        status: "modified",
+        newPath: null,
+        commits: [
+          { sha: c2, subject: "re-add a" },
+          { sha: c1, subject: "delete a" },
+        ],
+      },
+    ]);
+  });
+
   it("added then deleted omitted", () => {
     const repo = makeRepo({ "keep.md": "keep\n" });
     const base = headCommit(repo.dir);
