@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { makeRepo } from "./gitRepo.js";
 import { writeTree } from "./helpers.js";
 import { startServer } from "../server/serve.js";
 
@@ -65,6 +66,38 @@ describe("teachme validate", () => {
     expect(stderr).toBe(
       `No TeachMe content at ${missing}. Create it with the teachme-authoring skill.\n`,
     );
+    expect(stdout).toBe("");
+    expect(code).toBe(1);
+  });
+});
+
+describe("teachme status", () => {
+  it("status --json reports never-synced content", async () => {
+    const repo = makeRepo({
+      ".teachme/courses/arch/course.md": "---\ntitle: Architecture\n---\nIntro.\n",
+      ".teachme/courses/arch/01-setup.md": "---\ntitle: Setup\n---\nBody.\n",
+    });
+    const contentDir = path.join(repo.dir, ".teachme");
+
+    const { code, stdout, stderr } = await run(["status", contentDir, "--json"]);
+    expect(stderr).toBe("");
+    expect(code).toBe(0);
+
+    const report = JSON.parse(stdout);
+    expect(report.items).toEqual([
+      expect.objectContaining({ kind: "course", slug: "arch", state: "never-synced" }),
+    ]);
+  });
+
+  it("not a git repository exits 1", async () => {
+    const dir = writeTree({
+      ".teachme/courses/arch/course.md": "---\ntitle: Architecture\n---\nIntro.\n",
+      ".teachme/courses/arch/01-setup.md": "---\ntitle: Setup\n---\nBody.\n",
+    });
+    const contentDir = path.join(dir, ".teachme");
+
+    const { code, stdout, stderr } = await run(["status", contentDir]);
+    expect(stderr).toBe("teachme status needs a git repository\n");
     expect(stdout).toBe("");
     expect(code).toBe(1);
   });

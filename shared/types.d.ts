@@ -61,6 +61,15 @@ export type Content = {
 export type Commit = { sha: string; subject: string };
 export type FileChange = { path: string; status: 'modified' | 'added' | 'deleted' | 'renamed'; newPath: string | null; commits: Commit[] };
 
+export type StatusItem = {
+  kind: 'course' | 'quiz'; slug: string; file: string; syncedCommit: string | null;
+  state: 'ok' | 'stale' | 'never-synced' | 'unknown-commit';
+  stale: { file: string; title: string; sources: { path: string; commits: Commit[] }[] }[];
+  broken: { file: string; source: string; status: 'deleted' | 'renamed'; newPath: string | null }[];
+  uncovered: { dir: string; files: string[] }[];
+};
+export type StatusReport = { head: string; items: StatusItem[] };
+
 export type Attempt = {
   context: "standalone" | `course:${string}`;
   date: string;

@@ -5,14 +5,17 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import open from "open";
 import { loadContent } from "../server/content.js";
-import { resolveRepoRoot } from "../server/git.js";
+import { isGitRepo, resolveRepoRoot } from "../server/git.js";
 import { formatIssues, startServer } from "../server/serve.js";
+import { buildStatus, formatStatus } from "../server/status.js";
 
 const HELP = `Usage:
   teachme [dir]            Serve content (dir defaults to ./.teachme)
     --port <n>              Port to listen on (default 4321)
     --no-open               Don't open the browser
   teachme validate [dir]   Validate content and print errors/warnings
+  teachme status [dir]     Report content that went stale since it was synced
+    --json                  Print machine-readable JSON instead of text
   teachme --help           Show this help
 `;
 
@@ -55,6 +58,32 @@ function runValidate(dir) {
   const content = loadContent(absDir, { repoRoot });
   console.log(formatIssues(content));
   process.exitCode = content.errors.length > 0 ? 1 : 0;
+}
+
+/**
+ * `teachme status [dir] [--json]`.
+ * @param {string | undefined} dir
+ * @param {{ json: boolean }} options
+ * @returns {void}
+ */
+function runStatus(dir, options) {
+  const absDir = resolveDir(dir);
+  if (reportMissingDir(absDir)) {
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!isGitRepo(absDir)) {
+    process.stderr.write("teachme status needs a git repository\n");
+    process.exitCode = 1;
+    return;
+  }
+
+  const repoRoot = resolveRepoRoot(absDir);
+  const content = loadContent(absDir, { repoRoot });
+  const report = buildStatus(content, { contentDir: absDir, repoRoot });
+  console.log(options.json ? JSON.stringify(report, null, 2) : formatStatus(report));
+  process.exitCode = 0;
 }
 
 /**
@@ -122,7 +151,7 @@ async function main(argv) {
   const noOpen = argv.includes("--no-open");
   const filteredArgv = argv.filter((arg) => arg !== "--no-open");
 
-  /** @type {{ values: { port?: string; help?: boolean }; positionals: string[] }} */
+  /** @type {{ values: { port?: string; help?: boolean; json?: boolean }; positionals: string[] }} */
   let parsed;
   try {
     parsed = parseArgs({
@@ -130,6 +159,7 @@ async function main(argv) {
       options: {
         port: { type: "string" },
         help: { type: "boolean" },
+        json: { type: "boolean" },
       },
       allowPositionals: true,
     });
@@ -159,6 +189,10 @@ async function main(argv) {
   const [first, second] = positionals;
   if (first === "validate") {
     runValidate(second);
+    return;
+  }
+  if (first === "status") {
+    runStatus(second, { json: !!values.json });
     return;
   }
 
