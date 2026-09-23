@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Catalog, CourseDetail, PageDetail, ProjectProgress, TocItem } from "../../shared/types";
+import type { Catalog, CourseDetail, PageDetail, ProjectProgress, QuizDetail, TocItem } from "../../shared/types";
 import App from "../App";
 import { neighbors } from "../courseNav";
 
@@ -20,6 +20,7 @@ vi.mock("../api", () => {
     getCatalog: vi.fn(),
     getCourse: vi.fn(),
     getPage: vi.fn(),
+    getQuiz: vi.fn(),
     getProgress: vi.fn(),
     putProgress: vi.fn(),
   };
@@ -29,7 +30,7 @@ vi.mock("../components/Markdown", () => ({
   default: ({ source }: { source: string; baseDir: string }) => <div data-testid="markdown">{source}</div>,
 }));
 
-import { ApiError, getCatalog, getCourse, getPage, getProgress, putProgress } from "../api";
+import { ApiError, getCatalog, getCourse, getPage, getProgress, getQuiz, putProgress } from "../api";
 
 const catalog: Catalog = {
   project: "acme",
@@ -81,6 +82,51 @@ const pages: Record<string, PageDetail> = {
   },
 };
 
+const quizzes: Record<string, QuizDetail> = {
+  "sec-quiz": {
+    slug: "sec-quiz",
+    title: "Section Quiz",
+    description: "",
+    passingScore: 75,
+    course: "basics",
+    intro: "Section quiz intro.",
+    questions: [
+      {
+        slug: "sq1",
+        title: "Section question",
+        prompt: "Section prompt",
+        options: [
+          { md: "Right", correct: true },
+          { md: "Wrong", correct: false },
+        ],
+        multi: false,
+        explanation: null,
+      },
+    ],
+  },
+  "final-quiz": {
+    slug: "final-quiz",
+    title: "Final Exam",
+    description: "",
+    passingScore: 80,
+    course: "basics",
+    intro: "Final exam intro.",
+    questions: [
+      {
+        slug: "fq1",
+        title: "Final question",
+        prompt: "Final prompt",
+        options: [
+          { md: "Right", correct: true },
+          { md: "Wrong", correct: false },
+        ],
+        multi: false,
+        explanation: null,
+      },
+    ],
+  },
+};
+
 async function renderCourse(initialPath: string, progress: ProjectProgress) {
   vi.mocked(getCatalog).mockResolvedValue(catalog);
   vi.mocked(getProgress).mockResolvedValue(progress);
@@ -90,6 +136,11 @@ async function renderCourse(initialPath: string, progress: ProjectProgress) {
     const page = pages[path];
     if (!page) throw new ApiError(404, "Page not found");
     return page;
+  });
+  vi.mocked(getQuiz).mockImplementation(async (slug: string) => {
+    const quiz = quizzes[slug];
+    if (!quiz) throw new ApiError(404, "Quiz not found");
+    return quiz;
   });
   render(
     <MemoryRouter initialEntries={[initialPath]}>
@@ -103,6 +154,7 @@ describe("CourseView", () => {
     vi.mocked(getCatalog).mockReset();
     vi.mocked(getCourse).mockReset();
     vi.mocked(getPage).mockReset();
+    vi.mocked(getQuiz).mockReset();
     vi.mocked(getProgress).mockReset();
     vi.mocked(putProgress).mockReset();
   });
@@ -206,12 +258,24 @@ describe("CourseView", () => {
     expect(cont.getAttribute("href")).toBe("/courses/basics/01-welcome");
   });
 
-  it("quiz item renders a placeholder linking to the standalone quiz", async () => {
+  it("quiz item runs inline and Continue moves to the next TOC item", async () => {
     await renderCourse("/courses/basics/_quiz/sec-quiz", { courses: {}, quizzes: {} });
     await screen.findByRole("heading", { level: 1, name: "Section Quiz" });
-    expect(screen.getByText("Quiz")).toBeTruthy();
-    const link = screen.getByRole("link", { name: "Open quiz" });
-    expect(link.getAttribute("href")).toBe("/quizzes/sec-quiz");
+    expect(screen.queryByRole("link", { name: "Open quiz" })).toBeNull();
+    // TOC and pager stay visible around the inline quiz.
+    expect(document.getElementById("course-toc")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Course pages" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Question 1 of 1");
+    fireEvent.click(screen.getByRole("radio", { name: "Right" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "See results" }));
+
+    const continueButton = await screen.findByRole("button", { name: "Continue" });
+    fireEvent.click(continueButton);
+
+    await screen.findByRole("heading", { level: 1, name: "Final Exam" });
   });
 
   it("unknown page shows Page not found with a link back to the course", async () => {

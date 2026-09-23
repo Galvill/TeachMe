@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import type { CourseDetail, PageDetail, TocItem } from "../../shared/types";
-import { ApiError, getCourse, getPage } from "../api";
+import { Link, useNavigate, useParams, type NavigateFunction } from "react-router";
+import type { CourseDetail, PageDetail, QuizDetail, TocItem } from "../../shared/types";
+import { ApiError, getCourse, getPage, getQuiz } from "../api";
 import { useCatalog } from "../catalog";
 import Markdown from "../components/Markdown";
 import Pager from "../components/Pager";
+import QuizRunner from "../components/QuizRunner";
 import SourcesFooter from "../components/SourcesFooter";
 import Toc from "../components/Toc";
 import { coursePath, neighbors } from "../courseNav";
@@ -37,23 +38,56 @@ function isNarrowScreen(): boolean {
   return typeof window !== "undefined" && window.innerWidth <= DRAWER_BREAKPOINT;
 }
 
+type QuizState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; quiz: QuizDetail };
+
 /**
- * Placeholder for a `_quiz/<quizSlug>` TOC item: Task 5 replaces this body
- * with the inline QuizRunner. Kept as its own function so that swap touches
- * only this spot.
+ * Renders a `_quiz/<quizSlug>` TOC item inline: fetches the quiz and runs it
+ * in course context. `onContinue` (passed to QuizRunner's results screen)
+ * moves to the next TOC item, or back to the course landing at the end.
  */
-function QuizPlaceholder({ quizSlug, title }: { quizSlug: string; title: string }) {
-  return (
-    <div className="card">
-      <p className="card__meta">Quiz</p>
-      <h1>{title}</h1>
-      <p>
-        <Link to={`/quizzes/${encodeURIComponent(quizSlug)}`} className="button button--primary">
-          Open quiz
-        </Link>
-      </p>
-    </div>
-  );
+function InlineQuiz({
+  courseSlug,
+  quizSlug,
+  toc,
+  path,
+  navigate,
+}: {
+  courseSlug: string;
+  quizSlug: string;
+  toc: TocItem[];
+  path: string;
+  navigate: NavigateFunction;
+}) {
+  const [state, setState] = useState<QuizState>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    getQuiz(quizSlug)
+      .then((quiz) => {
+        if (!cancelled) setState({ status: "ready", quiz });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setState({ status: "error", message: messageOf(err) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quizSlug]);
+
+  if (state.status === "loading") {
+    return <p role="status">Loading…</p>;
+  }
+  if (state.status === "error") {
+    return <p role="alert">{state.message}</p>;
+  }
+
+  function handleContinue() {
+    const { next } = neighbors(toc, path);
+    navigate(next ? coursePath(courseSlug, next.path) : `/courses/${encodeURIComponent(courseSlug)}`);
+  }
+
+  return <QuizRunner quiz={state.quiz} context={`course:${courseSlug}`} onContinue={handleContinue} />;
 }
 
 export default function CourseView() {
@@ -174,8 +208,7 @@ export default function CourseView() {
   }
 
   function renderQuiz(slugOfQuiz: string) {
-    const item = toc.find((i) => i.path === path);
-    return <QuizPlaceholder quizSlug={slugOfQuiz} title={item?.title ?? slugOfQuiz} />;
+    return <InlineQuiz key={slugOfQuiz} courseSlug={slug} quizSlug={slugOfQuiz} toc={toc} path={path as string} navigate={navigate} />;
   }
 
   function renderPage() {
