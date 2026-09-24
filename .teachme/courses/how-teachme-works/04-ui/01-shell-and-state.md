@@ -8,6 +8,8 @@ sources:
   - src/ProgressProvider.tsx
   - src/progress.ts
   - src/api.ts
+  - src/pages/Home.tsx
+  - src/components/Toc.tsx
 ---
 Every screen needs two pieces of shared data: the catalog (what courses and quizzes exist)
 and the learner's progress. The app loads both once, at the top, so pages never fetch them
@@ -30,7 +32,8 @@ export default function App() {
 }
 ```
 
-`Shell` renders the header, the `ErrorBanner` with the catalog's errors and warnings, and
+`Shell` wraps everything in `SidebarProvider`, which shares the course sidebar's open state
+with the header (see the next lesson), and renders the header, the `ErrorBanner` with the catalog's errors and warnings, and
 these routes: `/`, `/courses/:slug`, `/courses/:slug/*`, `/quizzes/:slug`, and a `*`
 catch-all that shows "Page not found".
 

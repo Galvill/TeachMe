@@ -5,6 +5,8 @@ sources:
   - src/courseNav.ts
   - src/components/Pager.tsx
   - src/sidebar.tsx
+  - src/components/ResetCourseButton.tsx
+  - src/pages/Home.tsx
   - src/components/Markdown.tsx
   - src/components/CodeBlock.tsx
   - src/components/Mermaid.tsx
@@ -25,9 +27,10 @@ const QUIZ_PREFIX = "_quiz/";
 const quizSlug = path && path.startsWith(QUIZ_PREFIX) ? path.slice(QUIZ_PREFIX.length) : null;
 ```
 
-- No path: the course landing, with **Start**, or **Continue** to `lastPage`. Once the
-  course has progress, a **Reset progress** button (also on the Home course card) asks for
-  confirmation, then clears it with `resetCourse()`.
+- No path: the course landing, with **Start**, or **Continue** to `lastPage`. Next to it,
+  `ResetCourseButton` (also on the Home course card) shows **Reset progress** only while
+  `hasCourseProgress()` finds something to clear; it asks with `window.confirm()`, then calls
+  `update((p) => resetCourse(p, slug, quizSlugs))`.
 - A `_quiz/<slug>` path: `InlineQuiz` fetches the quiz and runs it with context
   `course:<slug>`.
 - Anything else: `getPage(slug, path)`; on success the page is marked visited with
@@ -44,7 +47,9 @@ or editable element.
 The sidebar's open state lives in `SidebarProvider` (`src/sidebar.tsx`), not in
 `CourseView`, so the ☰ toggle can sit in the sticky header and stay reachable while the
 lesson scrolls. `CourseView` marks the sidebar as mounted once its course has loaded; the
-header shows the toggle only then, so Home and standalone quizzes never get one.
+header shows the toggle only then, so Home and standalone quizzes never get one. Opening a
+course resets the TOC to open on wide screens and closed on narrow ones (`isNarrowScreen()`,
+860px and below).
 
 ## Rendering Markdown
 
