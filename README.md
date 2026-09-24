@@ -84,3 +84,10 @@ npm test                               # vitest
 npm run typecheck                      # tsc for the UI and the JSDoc-typed server
 npm run build                          # build the UI into dist/
 ```
+
+CI (`.github/workflows/ci.yml`) runs the tests, typecheck, build and content validation on
+every PR, and the packaged-product gate (`.claude/scripts/integration-gate.sh`) on PRs into
+`master`. PR titles must be [Conventional Commits](https://www.conventionalcommits.org/):
+PRs are squash-merged, and [release-please](https://github.com/googleapis/release-please)
+turns the `feat:`/`fix:` subjects on `master` into a release PR that bumps the version and
+writes `CHANGELOG.md`. Merging that PR tags the release.
