@@ -7,6 +7,8 @@ which lessons went stale after later commits.
 
 Everything runs locally: no accounts, no database, the server binds to `127.0.0.1` only.
 
+https://github.com/user-attachments/assets/45f16174-1607-43e8-8b8b-96e31b229a31
+
 ## Requirements
 
 - Node.js ≥ 20
