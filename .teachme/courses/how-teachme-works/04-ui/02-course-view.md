@@ -3,6 +3,8 @@ title: Course view and rendering
 sources:
   - src/pages/CourseView.tsx
   - src/courseNav.ts
+  - src/components/Pager.tsx
+  - src/sidebar.tsx
   - src/components/Markdown.tsx
   - src/components/CodeBlock.tsx
   - src/components/Mermaid.tsx
@@ -23,7 +25,9 @@ const QUIZ_PREFIX = "_quiz/";
 const quizSlug = path && path.startsWith(QUIZ_PREFIX) ? path.slice(QUIZ_PREFIX.length) : null;
 ```
 
-- No path: the course landing, with **Start**, or **Continue** to `lastPage`.
+- No path: the course landing, with **Start**, or **Continue** to `lastPage`. Once the
+  course has progress, a **Reset progress** button (also on the Home course card) asks for
+  confirmation, then clears it with `resetCourse()`.
 - A `_quiz/<slug>` path: `InlineQuiz` fetches the quiz and runs it with context
   `course:<slug>`.
 - Anything else: `getPage(slug, path)`; on success the page is marked visited with
@@ -32,8 +36,15 @@ const quizSlug = path && path.startsWith(QUIZ_PREFIX) ? path.slice(QUIZ_PREFIX.l
 
 Pages and quizzes share one sequence. `neighbors()` in `src/courseNav.ts` returns the TOC
 items before and after the current path, so the pager and the ← / → keys move from a
-section's last page into its quiz and on into the next section. The key handler ignores
-events whose target is an input, textarea, select, or editable element.
+section's last page into its quiz and on into the next section. On the course's last TOC
+item, page or quiz, the pager's next slot becomes **Back to catalog**, a link to `/`, and →
+goes there too. The key handler ignores events whose target is an input, textarea, select,
+or editable element.
+
+The sidebar's open state lives in `SidebarProvider` (`src/sidebar.tsx`), not in
+`CourseView`, so the ☰ toggle can sit in the sticky header and stay reachable while the
+lesson scrolls. `CourseView` marks the sidebar as mounted once its course has loaded; the
+header shows the toggle only then, so Home and standalone quizzes never get one.
 
 ## Rendering Markdown
 
@@ -74,5 +85,6 @@ links, turning a Windows repo root's backslashes into forward slashes.
 
 - A TOC path starting with `_quiz/` renders a quiz inline; other paths load a page and
   mark it visited.
-- Pager and arrow keys follow the TOC order, crossing sections and quizzes.
+- Pager and arrow keys follow the TOC order, crossing sections and quizzes, and lead back
+  to the catalog from the last item.
 - Mermaid and Shiki are lazy-loaded; a broken diagram becomes a local error box.

@@ -9,6 +9,8 @@ type Props = {
   quiz: QuizDetail;
   context: Attempt["context"];
   onContinue?: () => void;
+  /** Text for the in-course Continue button (default "Continue"). */
+  continueLabel?: string;
 };
 
 type Phase = "start" | "question" | "results";
@@ -18,7 +20,7 @@ type Phase = "start" | "question" | "results";
  * check/next) -> results. Saves exactly one attempt when results are first
  * reached; Retry restarts straight into question 1.
  */
-export default function QuizRunner({ quiz, context, onContinue }: Props) {
+export default function QuizRunner({ quiz, context, onContinue, continueLabel }: Props) {
   const { update } = useProgress();
   const [phase, setPhase] = useState<Phase>("start");
   const [index, setIndex] = useState(0);
@@ -97,7 +99,7 @@ export default function QuizRunner({ quiz, context, onContinue }: Props) {
   }
 
   if (phase === "results" && lastAttempt) {
-    return <QuizResults quiz={quiz} attempt={lastAttempt} onRetry={retry} onContinue={onContinue} />;
+    return <QuizResults quiz={quiz} attempt={lastAttempt} onRetry={retry} onContinue={onContinue} continueLabel={continueLabel} />;
   }
 
   const question = quiz.questions[index];

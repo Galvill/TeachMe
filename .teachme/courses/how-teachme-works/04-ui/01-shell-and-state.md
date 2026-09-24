@@ -70,8 +70,11 @@ one request at a time: changes made while a save is in flight are sent together 
 so saves never land out of order and the last write wins. A failed save shows
 `Progress could not be saved` but keeps the in-memory state.
 
-The functions passed to `update` live in `src/progress.ts` and are pure: `markVisited()`
-and `addAttempt()` return a new object and never mutate their input. The same file computes
+The functions passed to `update` live in `src/progress.ts` and are pure: `markVisited()`,
+`addAttempt()` and `resetCourse()` return a new object and never mutate their input.
+`resetCourse()` drops a course's visited pages and only the attempts its quizzes got with
+context `course:<slug>`: progress is keyed by quiz slug, so standalone attempts, or another
+course's, at the same quiz are kept. The same file computes
 display values: `coursePercent()` counts visited pages plus quizzes with at least one
 attempt, over all TOC items, and `bestAttempt()` picks the highest score ratio.
 

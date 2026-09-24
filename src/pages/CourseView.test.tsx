@@ -127,11 +127,11 @@ const quizzes: Record<string, QuizDetail> = {
   },
 };
 
-async function renderCourse(initialPath: string, progress: ProjectProgress) {
+async function renderCourse(initialPath: string, progress: ProjectProgress, courseDetail: CourseDetail = course) {
   vi.mocked(getCatalog).mockResolvedValue(catalog);
   vi.mocked(getProgress).mockResolvedValue(progress);
   vi.mocked(putProgress).mockResolvedValue(undefined);
-  vi.mocked(getCourse).mockResolvedValue(course);
+  vi.mocked(getCourse).mockResolvedValue(courseDetail);
   vi.mocked(getPage).mockImplementation(async (_slug: string, path: string) => {
     const page = pages[path];
     if (!page) throw new ApiError(404, "Page not found");
@@ -281,6 +281,113 @@ describe("CourseView", () => {
     fireEvent.click(continueButton);
 
     await screen.findByRole("heading", { level: 1, name: "Final Exam" });
+  });
+
+  it("a course-final quiz offers Back to catalog in its results and pager", async () => {
+    await renderCourse("/courses/basics/_quiz/final-quiz", { courses: {}, quizzes: {} });
+    await screen.findByRole("heading", { level: 1, name: "Final Exam" });
+
+    const pager = screen.getByRole("navigation", { name: "Course pages" });
+    expect(within(pager).getByRole("link", { name: /Back to catalog/ }).getAttribute("href")).toBe("/");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText("Question 1 of 1");
+    fireEvent.click(screen.getByRole("radio", { name: "Right" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "See results" }));
+
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Back to catalog" }));
+    await screen.findByRole("heading", { name: "Courses" }, { timeout: 5000 });
+  });
+
+  it("the last page of a page-terminated course links back to the catalog, also via ArrowRight", async () => {
+    const pagesOnly: CourseDetail = { ...course, quiz: null, toc: toc.filter((i) => i.type === "page") };
+    await renderCourse("/courses/basics/02-writing/02-quizzes", { courses: {}, quizzes: {} }, pagesOnly);
+    await screen.findByRole("heading", { level: 1, name: "Quizzes" });
+
+    const pager = screen.getByRole("navigation", { name: "Course pages" });
+    expect(within(pager).getByText("← Pages")).toBeTruthy();
+    const back = within(pager).getByRole("link", { name: /Back to catalog/ });
+    expect(back.getAttribute("href")).toBe("/");
+    expect(within(pager).getByText("End of course")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "ArrowRight" });
+    await screen.findByRole("heading", { name: "Courses" }, { timeout: 5000 });
+  });
+
+  it("pages before the end keep the plain next link", async () => {
+    await renderCourse("/courses/basics/02-writing/02-quizzes", { courses: {}, quizzes: {} });
+    await screen.findByRole("heading", { level: 1, name: "Quizzes" });
+    const pager = screen.getByRole("navigation", { name: "Course pages" });
+    expect(within(pager).queryByRole("link", { name: /Back to catalog/ })).toBeNull();
+    expect(within(pager).getByText("Section Quiz →")).toBeTruthy();
+  });
+
+  it("sidebar toggle lives in the sticky header and drives the TOC", async () => {
+    await renderCourse("/courses/basics/01-welcome", { courses: {}, quizzes: {} });
+    await screen.findByRole("heading", { level: 1, name: "Welcome" });
+
+    const header = document.querySelector("header.app-header") as HTMLElement;
+    const toggle = await within(header).findByRole("button", { name: "Collapse table of contents" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-controls")).toBe("course-toc");
+    // only one toggle, and not inside the scrolling main column
+    expect(screen.getAllByRole("button", { name: /table of contents/ })).toHaveLength(1);
+    expect(document.querySelector(".course-main .sidebar-toggle")).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-label")).toBe("Expand table of contents");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(".course-layout")!.className).toContain("is-collapsed");
+    expect(document.getElementById("course-toc")!.className).not.toContain("is-open");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("course-toc")!.className).toContain("is-open");
+  });
+
+  it("reset progress on the landing is confirm-gated and reverts Continue to Start", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    await renderCourse("/courses/basics", {
+      courses: { basics: { visited: ["01-welcome"], lastPage: "01-welcome" } },
+      quizzes: {
+        "sec-quiz": {
+          attempts: [
+            { context: "course:basics", date: "2026-01-01T00:00:00Z", score: 1, total: 1, answers: {} },
+            { context: "standalone", date: "2026-01-02T00:00:00Z", score: 0, total: 1, answers: {} },
+          ],
+        },
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Basics" });
+    const reset = screen.getByRole("button", { name: /Reset progress/ });
+
+    confirmSpy.mockReturnValueOnce(false);
+    fireEvent.click(reset);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(confirmSpy.mock.calls[0][0]).toContain("taken on their own or from another course are kept");
+    expect(screen.getByRole("link", { name: "Continue" })).toBeTruthy();
+    expect(putProgress).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValueOnce(true);
+    fireEvent.click(reset);
+    expect(await screen.findByRole("link", { name: "Start" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Reset progress/ })).toBeNull();
+
+    await waitFor(() => expect(putProgress).toHaveBeenCalled());
+    const saved = vi.mocked(putProgress).mock.calls.at(-1)![0];
+    expect(saved.courses.basics).toBeUndefined();
+    expect(saved.quizzes["sec-quiz"].attempts).toEqual([
+      { context: "standalone", date: "2026-01-02T00:00:00Z", score: 0, total: 1, answers: {} },
+    ]);
+    confirmSpy.mockRestore();
+  });
+
+  it("no reset control on the landing without course progress", async () => {
+    await renderCourse("/courses/basics", { courses: {}, quizzes: {} });
+    await screen.findByRole("heading", { level: 1, name: "Basics" });
+    expect(screen.queryByRole("button", { name: /Reset progress/ })).toBeNull();
   });
 
   it("unknown page shows Page not found with a link back to the course", async () => {

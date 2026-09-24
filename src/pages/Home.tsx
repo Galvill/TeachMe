@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import type { CourseSummary, QuizSummary } from "../../shared/types";
 import { useCatalog } from "../catalog";
+import ResetCourseButton from "../components/ResetCourseButton";
 import { bestAttempt, summaryPercent } from "../progress";
 import { useProgress } from "../ProgressProvider";
 
@@ -43,6 +44,9 @@ function CourseCard({ course }: { course: CourseSummary }) {
         <Link to={href} className={percent === 0 ? "button button--primary" : "button"}>
           {percent === 0 ? "Start" : "Continue"}
         </Link>
+      </div>
+      <div className="course-card__reset">
+        <ResetCourseButton courseSlug={course.slug} courseTitle={course.title} quizSlugs={course.quizzes} />
       </div>
     </article>
   );

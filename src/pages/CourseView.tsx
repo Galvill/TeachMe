@@ -1,21 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Link, useNavigate, useParams, type NavigateFunction } from "react-router";
 import type { CourseDetail, PageDetail, QuizDetail, TocItem } from "../../shared/types";
 import { ApiError, getCourse, getPage, getQuiz } from "../api";
 import { useCatalog } from "../catalog";
 import Markdown from "../components/Markdown";
-import Pager from "../components/Pager";
+import Pager, { CATALOG_LABEL } from "../components/Pager";
 import QuizRunner from "../components/QuizRunner";
+import ResetCourseButton from "../components/ResetCourseButton";
 import SourcesFooter from "../components/SourcesFooter";
 import Toc from "../components/Toc";
 import { coursePath, neighbors } from "../courseNav";
 import { markVisited } from "../progress";
 import { useProgress } from "../ProgressProvider";
+import { isNarrowScreen, useSidebar } from "../sidebar";
 
 export { neighbors } from "../courseNav";
 
 const QUIZ_PREFIX = "_quiz/";
-const DRAWER_BREAKPOINT = 860;
 
 type CourseState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; course: CourseDetail };
 
@@ -34,16 +35,13 @@ function dirname(filePath: string): string {
   return idx === -1 ? "" : filePath.slice(0, idx);
 }
 
-function isNarrowScreen(): boolean {
-  return typeof window !== "undefined" && window.innerWidth <= DRAWER_BREAKPOINT;
-}
-
 type QuizState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; quiz: QuizDetail };
 
 /**
  * Renders a `_quiz/<quizSlug>` TOC item inline: fetches the quiz and runs it
  * in course context. `onContinue` (passed to QuizRunner's results screen)
- * moves to the next TOC item, or back to the course landing at the end.
+ * moves to the next TOC item; on the course's last item it becomes
+ * "Back to catalog" and goes to `/`, matching the pager.
  */
 function InlineQuiz({
   courseSlug,
@@ -82,12 +80,20 @@ function InlineQuiz({
     return <p role="alert">{state.message}</p>;
   }
 
+  const { next } = neighbors(toc, path);
+
   function handleContinue() {
-    const { next } = neighbors(toc, path);
-    navigate(next ? coursePath(courseSlug, next.path) : `/courses/${encodeURIComponent(courseSlug)}`);
+    navigate(next ? coursePath(courseSlug, next.path) : "/");
   }
 
-  return <QuizRunner quiz={state.quiz} context={`course:${courseSlug}`} onContinue={handleContinue} />;
+  return (
+    <QuizRunner
+      quiz={state.quiz}
+      context={`course:${courseSlug}`}
+      onContinue={handleContinue}
+      continueLabel={next ? undefined : CATALOG_LABEL}
+    />
+  );
 }
 
 export default function CourseView() {
@@ -103,7 +109,21 @@ export default function CourseView() {
 
   const [courseState, setCourseState] = useState<CourseState>({ status: "loading" });
   const [pageState, setPageState] = useState<PageState>({ status: "loading" });
-  const [sidebarOpen, setSidebarOpen] = useState(() => !isNarrowScreen());
+  const { open: sidebarOpen, setOpen: setSidebarOpen, setMounted: setSidebarMounted } = useSidebar();
+  const courseReady = courseState.status === "ready";
+
+  // The header shows the TOC toggle only while this view has a TOC mounted.
+  // Layout effects, so the header and sidebar never paint out of sync.
+  useLayoutEffect(() => {
+    if (!courseReady) return;
+    setSidebarMounted(true);
+    return () => setSidebarMounted(false);
+  }, [courseReady, setSidebarMounted]);
+
+  // Each course starts with the TOC open on wide screens, closed on narrow ones.
+  useLayoutEffect(() => {
+    setSidebarOpen(!isNarrowScreen());
+  }, [slug, setSidebarOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,10 +166,12 @@ export default function CourseView() {
   useEffect(() => {
     window.scrollTo(0, 0);
     if (isNarrowScreen()) setSidebarOpen(false);
-  }, [slug, path]);
+  }, [slug, path, setSidebarOpen]);
 
   const toc = courseState.status === "ready" ? courseState.course.toc : [];
   const { prev, next } = path === null ? { prev: null, next: toc[0] ?? null } : neighbors(toc, path);
+  // On the course's last TOC item (page or quiz), the pager and → lead back to the catalog.
+  const atEnd = path !== null && toc.length > 0 && toc[toc.length - 1].path === path;
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -161,11 +183,14 @@ export default function CourseView() {
         navigate(coursePath(slug, prev.path));
       } else if (e.key === "ArrowRight" && next) {
         navigate(coursePath(slug, next.path));
+      } else if (e.key === "ArrowRight" && atEnd) {
+        // Same target as the pager's "Back to catalog" link on the last item.
+        navigate("/");
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [slug, prev, next, navigate]);
+  }, [slug, prev, next, atEnd, navigate]);
 
   if (courseState.status === "loading") {
     return (
@@ -183,6 +208,7 @@ export default function CourseView() {
   }
 
   const course = courseState.course;
+  const quizSlugs = toc.flatMap((item) => (item.type === "quiz" && item.quizSlug ? [item.quizSlug] : []));
 
   function renderLanding() {
     const lastPage = progress.courses[slug]?.lastPage ?? null;
@@ -197,10 +223,11 @@ export default function CourseView() {
         <h1>{course.title}</h1>
         <Markdown source={course.intro} baseDir={`courses/${slug}`} />
         {startItem && (
-          <p>
+          <p className="course-landing__actions">
             <Link to={href} className="button button--primary">
               {lastPage ? "Continue" : "Start"}
             </Link>
+            <ResetCourseButton courseSlug={slug} courseTitle={course.title} quizSlugs={quizSlugs} />
           </p>
         )}
       </>
@@ -263,18 +290,8 @@ export default function CourseView() {
         }}
       />
       <main className="course-main page">
-        <button
-          type="button"
-          className="sidebar-toggle icon-button"
-          aria-label={sidebarOpen ? "Collapse table of contents" : "Expand table of contents"}
-          aria-expanded={sidebarOpen}
-          aria-controls="course-toc"
-          onClick={() => setSidebarOpen((o) => !o)}
-        >
-          ☰
-        </button>
         {path === null ? renderLanding() : quizSlug !== null ? renderQuiz(quizSlug) : renderPage()}
-        {showPager && <Pager courseSlug={slug} prev={prev} next={next} />}
+        {showPager && <Pager courseSlug={slug} prev={prev} next={next} atEnd={atEnd} />}
       </main>
     </div>
   );

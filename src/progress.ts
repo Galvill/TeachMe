@@ -92,3 +92,43 @@ export function isCorrect(correct: boolean[], selected: number[]): boolean {
   }
   return true;
 }
+
+/** The attempt context a course's inline quizzes save under. */
+function courseContext(course: string): Attempt["context"] {
+  return `course:${course}`;
+}
+
+/**
+ * Clear one course's progress: drops its `visited`/`lastPage` entry and, for
+ * each of the course's quiz slugs, the attempts made *inside this course*
+ * (`context === "course:<course>"`). Standalone attempts and attempts made
+ * from another course sharing the quiz slug are kept, because
+ * `ProjectProgress.quizzes` is keyed by quiz slug only. A quiz left with no
+ * attempts loses its entry. Never mutates `p`; returns `p` unchanged when
+ * there is nothing to clear.
+ */
+export function resetCourse(p: ProjectProgress, course: string, quizSlugs: string[]): ProjectProgress {
+  if (!hasCourseProgress(p, course, quizSlugs)) return p;
+  const { [course]: _removed, ...courses } = p.courses;
+  const ctx = courseContext(course);
+  const quizzes = { ...p.quizzes };
+  for (const slug of quizSlugs) {
+    const existing = quizzes[slug];
+    if (!existing) continue;
+    const attempts = existing.attempts.filter((a) => a.context !== ctx);
+    if (attempts.length === existing.attempts.length) continue;
+    if (attempts.length === 0) delete quizzes[slug];
+    else quizzes[slug] = { attempts };
+  }
+  return { ...p, courses, quizzes };
+}
+
+/**
+ * True when `resetCourse` would clear anything: the course has a progress
+ * entry, or one of its quizzes has an attempt made inside this course.
+ */
+export function hasCourseProgress(p: ProjectProgress, course: string, quizSlugs: string[]): boolean {
+  if (p.courses[course]) return true;
+  const ctx = courseContext(course);
+  return quizSlugs.some((slug) => (p.quizzes[slug]?.attempts ?? []).some((a) => a.context === ctx));
+}

@@ -4,8 +4,10 @@ import {
   addAttempt,
   bestAttempt,
   coursePercent,
+  hasCourseProgress,
   isCorrect,
   markVisited,
+  resetCourse,
   summaryPercent,
 } from "./progress";
 
@@ -123,5 +125,66 @@ describe("summaryPercent", () => {
   it("is 0 when the denominator is 0", () => {
     const s: CourseSummary = { slug: "empty", title: "Empty", description: "", duration: null, pageCount: 0, quizzes: [] };
     expect(summaryPercent(s, emptyProgress)).toBe(0);
+  });
+});
+
+describe("resetCourse", () => {
+  const inCourse = (course: string): Attempt => ({ context: `course:${course}`, date: "2026-01-01T00:00:00Z", score: 1, total: 2, answers: {} });
+  const standalone: Attempt = { context: "standalone", date: "2026-01-02T00:00:00Z", score: 2, total: 2, answers: {} };
+
+  const base: ProjectProgress = {
+    courses: {
+      intro: { visited: ["p1", "p2"], lastPage: "p2" },
+      other: { visited: ["x"], lastPage: "x" },
+    },
+    quizzes: {
+      "intro-quiz": { attempts: [inCourse("intro")] },
+      shared: { attempts: [inCourse("intro"), standalone, inCourse("other")] },
+      unrelated: { attempts: [inCourse("intro")] },
+    },
+  };
+
+  it("removes the course entry and this course's attempts at its quizzes only", () => {
+    const next = resetCourse(base, "intro", ["intro-quiz", "shared"]);
+    expect(next.courses).toEqual({ other: { visited: ["x"], lastPage: "x" } });
+    // a quiz left with no attempts loses its entry
+    expect(next.quizzes["intro-quiz"]).toBeUndefined();
+    // standalone and other-course attempts at a shared quiz are kept
+    expect(next.quizzes.shared.attempts).toEqual([standalone, inCourse("other")]);
+    // quizzes not named are untouched, even with this course's context
+    expect(next.quizzes.unrelated).toBe(base.quizzes.unrelated);
+    // input never mutated
+    expect(base.courses.intro.visited).toEqual(["p1", "p2"]);
+    expect(base.quizzes.shared.attempts).toHaveLength(3);
+    expect(base.quizzes["intro-quiz"].attempts).toHaveLength(1);
+  });
+
+  it("drops percent to 0 when all progress was made in the course", () => {
+    const toc: TocItem[] = [
+      { type: "page", path: "p1", title: "P1", section: null },
+      { type: "page", path: "p2", title: "P2", section: null },
+      { type: "quiz", path: "_quiz/intro-quiz", title: "Q", section: null, quizSlug: "intro-quiz" },
+    ];
+    expect(coursePercent(toc, base, "intro")).toBe(100);
+    expect(coursePercent(toc, resetCourse(base, "intro", ["intro-quiz"]), "intro")).toBe(0);
+  });
+
+  it("is a no-op for a course with no progress", () => {
+    expect(resetCourse(base, "missing", ["nope"])).toBe(base);
+    expect(resetCourse(emptyProgress, "intro", ["intro-quiz"])).toBe(emptyProgress);
+  });
+});
+
+describe("hasCourseProgress", () => {
+  it("is true for a course entry or an in-course attempt, not for standalone attempts", () => {
+    const standaloneOnly: ProjectProgress = {
+      courses: {},
+      quizzes: { q: { attempts: [{ context: "standalone", date: "2026-01-01T00:00:00Z", score: 1, total: 1, answers: {} }] } },
+    };
+    expect(hasCourseProgress(standaloneOnly, "intro", ["q"])).toBe(false);
+    expect(hasCourseProgress(markVisited(emptyProgress, "intro", "p1"), "intro", [])).toBe(true);
+    const inCourse = addAttempt(emptyProgress, "q", { context: "course:intro", date: "2026-01-01T00:00:00Z", score: 1, total: 1, answers: {} });
+    expect(hasCourseProgress(inCourse, "intro", ["q"])).toBe(true);
+    expect(hasCourseProgress(inCourse, "intro", [])).toBe(false);
   });
 });
