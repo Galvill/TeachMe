@@ -72,10 +72,14 @@ export function summaryPercent(s: CourseSummary, p: ProjectProgress): number {
 
 /**
  * The attempt with the highest score/total ratio; ties go to the attempt
- * with the later `date`. Null when there are no attempts.
+ * with the later `date`. Null when there are no attempts. With `course`,
+ * only attempts made inside that course (context `course:<course>`) are
+ * considered, matching how `coursePercent` counts quizzes; without it,
+ * every attempt counts (standalone views, the Home quiz list).
  */
-export function bestAttempt(p: ProjectProgress, quiz: string): Attempt | null {
-  const attempts = p.quizzes[quiz]?.attempts ?? [];
+export function bestAttempt(p: ProjectProgress, quiz: string, course?: string): Attempt | null {
+  const all = p.quizzes[quiz]?.attempts ?? [];
+  const attempts = course === undefined ? all : all.filter((a) => a.context === courseContext(course));
   if (attempts.length === 0) return null;
   return attempts.reduce((best, a) => {
     const bestRatio = best.score / best.total;

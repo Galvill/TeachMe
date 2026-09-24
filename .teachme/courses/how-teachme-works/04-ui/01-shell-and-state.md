@@ -79,7 +79,9 @@ display values. `coursePercent()`, and `summaryPercent()` on the Home card, coun
 pages plus quizzes with at least one attempt made *inside this course* (context
 `course:<slug>`), over all TOC items. A standalone attempt therefore never moves a course
 off 0%, and a reset course always reads 0% and **Start**. `bestAttempt()` picks the highest
-score ratio over all of a quiz's attempts, as the Quizzes list shows.
+score ratio: over all of a quiz's attempts for the Home Quizzes list, or, given a course
+slug, over that course's attempts only. The course sidebar uses the course-scoped form for
+its score badge and failed mark, so a quiz taken only on its own shows no badge there.
 
 ## Key takeaways
 

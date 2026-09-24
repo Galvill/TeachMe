@@ -92,6 +92,16 @@ describe("coursePercent", () => {
 });
 
 describe("bestAttempt", () => {
+  it("with a course, considers only that course's attempts", () => {
+    const standalone: Attempt = { context: "standalone", date: "2026-01-01T00:00:00Z", score: 4, total: 4, answers: {} };
+    const other: Attempt = { context: "course:other", date: "2026-01-02T00:00:00Z", score: 4, total: 4, answers: {} };
+    const mine: Attempt = { context: "course:intro", date: "2026-01-03T00:00:00Z", score: 1, total: 4, answers: {} };
+    const p: ProjectProgress = { courses: {}, quizzes: { q: { attempts: [standalone, other, mine] } } };
+    expect(bestAttempt(p, "q")).toBe(other);
+    expect(bestAttempt(p, "q", "intro")).toBe(mine);
+    expect(bestAttempt(p, "q", "none")).toBeNull();
+  });
+
   it("tie goes to latest", () => {
     const a1: Attempt = { context: "standalone", date: "2026-01-01T00:00:00Z", score: 2, total: 4, answers: {} };
     const a2: Attempt = { context: "standalone", date: "2026-01-02T00:00:00Z", score: 1, total: 2, answers: {} };

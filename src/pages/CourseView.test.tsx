@@ -199,6 +199,34 @@ describe("CourseView", () => {
     expect(finalQuiz.querySelector(".toc__score")).toBeNull();
   });
 
+  it("toc quiz badge and failed mark count only attempts made in this course", async () => {
+    await renderCourse("/courses/basics/01-welcome", {
+      courses: {},
+      quizzes: {
+        "sec-quiz": { attempts: [{ context: "standalone", date: "2026-01-01T00:00:00Z", score: 1, total: 4, answers: {} }] },
+        "final-quiz": {
+          attempts: [
+            { context: "standalone", date: "2026-01-01T00:00:00Z", score: 8, total: 8, answers: {} },
+            { context: "course:other", date: "2026-01-02T00:00:00Z", score: 8, total: 8, answers: {} },
+            { context: "course:basics", date: "2026-01-03T00:00:00Z", score: 3, total: 8, answers: {} },
+          ],
+        },
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Welcome" });
+    const sidebar = within(document.getElementById("course-toc")!);
+
+    // only a standalone attempt: no badge, no failed mark
+    const secQuiz = sidebar.getByText("Section Quiz").closest("a")!;
+    expect(secQuiz.querySelector(".toc__score")).toBeNull();
+    expect(secQuiz.className).not.toContain("is-failed");
+
+    // best in-course attempt is 3/8 (below 80%), despite 8/8 elsewhere
+    const finalQuiz = sidebar.getByText("Final quiz").closest("a")!;
+    expect(finalQuiz.querySelector(".toc__score")?.textContent).toBe("3/8");
+    expect(finalQuiz.className).toContain("is-failed");
+  });
+
   it("pager and arrow keys", async () => {
     await renderCourse("/courses/basics/02-writing/01-pages", { courses: {}, quizzes: {} });
     await screen.findByRole("heading", { level: 1, name: "Pages" });
