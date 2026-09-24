@@ -14,5 +14,6 @@ area?
 ## Explanation
 `CourseView` computes `quizSlug` from paths starting with `QUIZ_PREFIX = "_quiz/"` and
 renders `InlineQuiz`, which fetches the quiz and runs `QuizRunner` with context
-`course:<slug>`. The TOC stays visible, and the `_quiz/<slug>` paths come from
-`loadCourseToc()` in `server/content.js`.
+`course:<slug>`; its **Continue** goes to the next TOC item, or reads **Back to catalog**
+and goes to `/` when the quiz is the course's last item. The TOC stays visible, and the
+`_quiz/<slug>` paths come from `loadCourseToc()` in `server/content.js`.

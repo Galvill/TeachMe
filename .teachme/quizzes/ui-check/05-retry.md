@@ -13,4 +13,5 @@ A learner finishes a quiz, reaches the results, and clicks **Retry**. What happe
 ## Explanation
 `retry()` in `src/components/QuizRunner.tsx` clears `answers`, `selected`, `checked` and
 `lastAttempt`, and sets the phase to `"question"`. The attempt saved by `finish()` through
-`addAttempt()` is untouched; a new one is saved when results are reached again.
+`addAttempt()` is untouched; a new one is saved when results are reached again. Retry works the same standalone and in
+a course.

@@ -8,7 +8,7 @@ sources:
 ---
 Quizzes run in two places, standalone at `/quizzes/:slug` and inline in a course, but the
 learner should get the same experience and the same saved history in both. One component,
-`QuizRunner`, handles both; only its `context` and `onContinue` props differ.
+`QuizRunner`, handles both; only its `context`, `onContinue` and `continueLabel` props differ.
 
 ## Phases
 
@@ -58,9 +58,11 @@ update((p) => addAttempt(p, quiz.slug, attempt));
 
 `QuizResults` shows the score, "Passed" or "Not passed" against `passingScore`, and an
 expandable ✓/✗ row per question with the learner's answer, the correct answer and the
-explanation. Its buttons depend on context: in a course, **Continue** calls `onContinue`
-(the next TOC item); standalone, **Back to home** plus a link to the quiz's related
-`course`, if it has one.
+explanation. **Retry** is always there; the other buttons depend on context. In a course,
+**Continue** calls `onContinue`, which goes to the next TOC item. On the course's last item
+the course view passes `continueLabel`, so the same button reads **Back to catalog** and goes
+to `/`. Standalone, there is **Back to home** plus a link to the quiz's related `course`, if
+it has one.
 
 ## Key takeaways
 

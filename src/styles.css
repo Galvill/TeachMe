@@ -198,6 +198,18 @@ button {
   color: var(--text);
 }
 
+/* Course-TOC toggle (course routes only) + brand, kept together on the left. */
+.app-header__start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-header__start .sidebar-toggle {
+  margin-left: calc(-1 * var(--space-2));
+}
+
 .app-header__sep {
   color: var(--faint);
   font-weight: 400;
@@ -291,6 +303,17 @@ button {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   text-align: right;
+}
+
+.course-card__reset {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.course-card__reset:empty {
+  display: none;
 }
 
 .quiz-list {
@@ -531,6 +554,23 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pager__link--end {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.pager__link--end .pager__title {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.course-landing__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
 }
 
 .sources {
@@ -909,6 +949,18 @@ button {
   background: var(--surface-hover);
 }
 
+/* Low-emphasis action (e.g. "Reset progress"): text-like until hovered. */
+.button--quiet {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.button--quiet:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: var(--danger-soft);
+}
+
 .progress {
   height: 3px;
   border-radius: 999px;
@@ -1025,6 +1077,10 @@ button {
     z-index: 30;
     width: min(var(--sidebar-width), 85vw);
     height: auto;
+    /* Fill top..bottom. With the wide layout's align-self: start, Chromium sizes the
+       fixed drawer to its content and, when that is taller than the viewport, shifts
+       it up over the sticky header (and its TOC toggle). */
+    align-self: stretch;
     transform: translateX(-100%);
     visibility: hidden;
     transition: transform 200ms var(--ease), visibility 200ms;

@@ -9,10 +9,12 @@ type Props = {
   attempt: Attempt;
   onRetry: () => void;
   onContinue?: () => void;
+  /** Text for the in-course Continue button (default "Continue"). */
+  continueLabel?: string;
 };
 
 /** Results screen: score, pass/fail, per-question review, and the context-appropriate next steps. */
-export default function QuizResults({ quiz, attempt, onRetry, onContinue }: Props) {
+export default function QuizResults({ quiz, attempt, onRetry, onContinue, continueLabel = "Continue" }: Props) {
   const catalog = useCatalog();
   const baseDir = `quizzes/${quiz.slug}`;
   const percent = Math.round((100 * attempt.score) / attempt.total);
@@ -74,7 +76,7 @@ export default function QuizResults({ quiz, attempt, onRetry, onContinue }: Prop
         {inCourse ? (
           onContinue && (
             <button type="button" className="button button--primary" onClick={onContinue}>
-              Continue
+              {continueLabel}
             </button>
           )
         ) : (

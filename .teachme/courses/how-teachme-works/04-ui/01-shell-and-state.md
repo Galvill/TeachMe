@@ -8,6 +8,8 @@ sources:
   - src/ProgressProvider.tsx
   - src/progress.ts
   - src/api.ts
+  - src/pages/Home.tsx
+  - src/components/Toc.tsx
 ---
 Every screen needs two pieces of shared data: the catalog (what courses and quizzes exist)
 and the learner's progress. The app loads both once, at the top, so pages never fetch them
@@ -30,7 +32,8 @@ export default function App() {
 }
 ```
 
-`Shell` renders the header, the `ErrorBanner` with the catalog's errors and warnings, and
+`Shell` wraps everything in `SidebarProvider`, which shares the course sidebar's open state
+with the header (see the next lesson), and renders the header, the `ErrorBanner` with the catalog's errors and warnings, and
 these routes: `/`, `/courses/:slug`, `/courses/:slug/*`, `/quizzes/:slug`, and a `*`
 catch-all that shows "Page not found".
 
@@ -70,10 +73,18 @@ one request at a time: changes made while a save is in flight are sent together 
 so saves never land out of order and the last write wins. A failed save shows
 `Progress could not be saved` but keeps the in-memory state.
 
-The functions passed to `update` live in `src/progress.ts` and are pure: `markVisited()`
-and `addAttempt()` return a new object and never mutate their input. The same file computes
-display values: `coursePercent()` counts visited pages plus quizzes with at least one
-attempt, over all TOC items, and `bestAttempt()` picks the highest score ratio.
+The functions passed to `update` live in `src/progress.ts` and are pure: `markVisited()`,
+`addAttempt()` and `resetCourse()` return a new object and never mutate their input.
+`resetCourse()` drops a course's visited pages and only the attempts its quizzes got with
+context `course:<slug>`: progress is keyed by quiz slug, so standalone attempts, or another
+course's, at the same quiz are kept. The same file computes
+display values. `coursePercent()`, and `summaryPercent()` on the Home card, count visited
+pages plus quizzes with at least one attempt made *inside this course* (context
+`course:<slug>`), over all TOC items. A standalone attempt therefore never moves a course
+off 0%, and a reset course always reads 0% and **Start**. `bestAttempt()` picks the highest
+score ratio: over all of a quiz's attempts for the Home Quizzes list, or, given a course
+slug, over that course's attempts only. The course sidebar uses the course-scoped form for
+its score badge and failed mark, so a quiz taken only on its own shows no badge there.
 
 ## Key takeaways
 

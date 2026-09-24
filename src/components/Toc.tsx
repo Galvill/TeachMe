@@ -57,7 +57,7 @@ export default function Toc({ courseSlug, courseTitle, toc, currentPath, open, o
           const current = currentPath === item.path;
           const visited = item.type === "page" && visitedPaths.has(item.path);
 
-          const best = item.type === "quiz" && item.quizSlug ? bestAttempt(progress, item.quizSlug) : null;
+          const best = item.type === "quiz" && item.quizSlug ? bestAttempt(progress, item.quizSlug, courseSlug) : null;
           const passingScore = item.type === "quiz" && item.quizSlug ? catalog.quizzes.find((q) => q.slug === item.quizSlug)?.passingScore : undefined;
           const bestPercent = best ? Math.round((100 * best.score) / best.total) : null;
           const failed = best !== null && bestPercent !== null && passingScore !== undefined && bestPercent < passingScore;
