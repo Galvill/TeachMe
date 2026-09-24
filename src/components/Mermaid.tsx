@@ -10,6 +10,20 @@ function sanitizeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
+/** Mirrors `--font-sans` in styles.css; used when the stylesheet isn't loaded (e.g. tests). */
+export const FALLBACK_FONT_FAMILY =
+  'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+
+/**
+ * The app's sans-serif stack, read from the `--font-sans` token so diagram
+ * labels are measured and drawn in the same font as the surrounding page
+ * instead of Mermaid's own default (`"trebuchet ms", verdana, arial`).
+ */
+export function appFontFamily(): string {
+  const fromCss = getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim();
+  return fromCss || FALLBACK_FONT_FAMILY;
+}
+
 /**
  * Renders a Mermaid diagram from source. Lazy-loads mermaid, re-initializes
  * it with the current theme before every render (so it stays in sync when
@@ -27,7 +41,21 @@ export default function Mermaid({ code }: Props) {
 
     import("mermaid")
       .then(async ({ default: mermaid }) => {
-        mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: theme === "dark" ? "dark" : "default" });
+        const fontFamily = appFontFamily();
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: theme === "dark" ? "dark" : "default",
+          // Pin the font explicitly: layout measures label text in this font, and
+          // Mermaid's default stack resolves differently per OS (issue #3).
+          fontFamily,
+          themeVariables: { fontFamily },
+          // Draw labels as plain SVG <text> instead of HTML inside <foreignObject>
+          // (Mermaid's default). foreignObject labels are sized by the browser's
+          // CSS layout in a detached element, which is the least predictable
+          // measurement path across machines (issue #3).
+          htmlLabels: false,
+        });
         try {
           const { svg } = await mermaid.render(id, code);
           if (!cancelled) setState({ status: "ok", svg });
