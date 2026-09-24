@@ -150,6 +150,9 @@ These two fields drive `teachme status` (staleness detection from git history).
 - A page or question becomes **stale** when a file in its `sources:` is modified or renamed
   after the parent course's/quiz's `syncedCommit`. Content without `sources:` is never
   reported stale, so list every file the text makes claims about.
+- Point `sources:` at the implementing files, not at READMEs or other docs about them:
+  staleness tracking only watches the listed paths' own git history, so a doc-only
+  `sources:` entry will not go stale when the real behavior changes underneath it.
 - `syncedCommit` is allowed on `course.md` and `quiz.md` only. Set it to the output of
   `git rev-parse --short HEAD` at the moment the content matches the code.
 - **Always quote `syncedCommit`.** YAML reads unquoted hex like `1234567`, `0123456` or

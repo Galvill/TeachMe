@@ -40,6 +40,43 @@ function run(args) {
   });
 }
 
+describe("teachme --version", () => {
+  const pkgVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"))
+    .version;
+
+  it("prints the package version and exits 0", async () => {
+    const { code, stdout, stderr } = await run(["--version"]);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${pkgVersion}\n`);
+    expect(code).toBe(0);
+  });
+
+  it("-v is an alias for --version", async () => {
+    const { code, stdout, stderr } = await run(["-v"]);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${pkgVersion}\n`);
+    expect(code).toBe(0);
+  });
+
+  it("works from a cwd outside the repo", async () => {
+    const { code, stdout, stderr } = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [binPath, "--version"], {
+        cwd: os.tmpdir(),
+        env: { ...process.env, TEACHME_HOME: tmpHome() },
+      });
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (err += d));
+      child.on("error", reject);
+      child.on("close", (c) => resolve({ code: c, stdout: out, stderr: err }));
+    });
+    expect(stderr).toBe("");
+    expect(stdout).toBe(`${pkgVersion}\n`);
+    expect(code).toBe(0);
+  });
+});
+
 describe("teachme validate", () => {
   it("validate example exits 0", async () => {
     const { code, stdout, stderr } = await run(["validate", exampleContentDir]);
