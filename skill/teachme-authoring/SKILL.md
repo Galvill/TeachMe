@@ -50,11 +50,25 @@ repo, ask the user for its path. Never skip validation because the CLI is missin
 1. **Scope.** Settle topic, audience (new hire, or experienced engineer new to this area)
    and size. Default: 5–12 lessons of 3–7 minutes each, grouped in sections, one quiz per
    section, one final quiz. Ask the user only if the topic itself is unclear.
+
+   Topic ideas (optional starting points — pick, combine, adapt, or ignore; the topic
+   itself always wins):
+   - **Dependencies** — walk through what's declared in the manifest/lockfile and what
+     each one is actually used for.
+   - **Modules overview** — the software's parts and how they interact (see the dogfood
+     course's `.teachme/courses/how-teachme-works/01-overview.md` for the shape).
+   - **Module deep dive** — one module's internal operation, one module per section (see
+     the dogfood course's per-module sections, `02-content-format/`, `03-server/`, etc.).
+   - a real request/flow end-to-end (already covered by Step 2's "trace 1-2 real flows").
 2. **Investigate. Write nothing before this step is done.**
    - Read the entry points (`main`, server bootstrap, router, CLI, `package.json` scripts).
    - Trace 1–2 real flows end to end (e.g. one request from route to database and back),
      noting each file and function on the path.
-   - Write down the list of key files: these become `sources:`.
+   - Treat READMEs, comments and other docs as leads to check, not as facts: confirm every
+     claim they make by reading the implementation before it goes in a lesson. Docs drift;
+     the code is what `teachme status` tracks.
+   - Write down the list of key files: these become `sources:`. Prefer the implementing
+     code over the docs that describe it (see **Quality rules**).
    - Read existing `.teachme/` content (if any) so you extend it instead of duplicating it.
 3. **Outline.** Sections → lessons, with exactly one learning goal per lesson, and the quiz
    slugs. For courses over ~8 lessons, show the outline to the user and wait for approval.
@@ -165,6 +179,10 @@ only after the code is committed.
 
 - **Real paths only.** Every path, function, type, config key, command and excerpt exists at
   the stamped commit. Open the file to confirm; never write from memory or assumption.
+- **Code is ground truth, docs are hints.** If a README, comment or existing doc disagrees
+  with what the code does, the code wins and the doc is wrong or stale. `sources:` should
+  list the files that implement the behavior, not the docs that describe it, so staleness
+  detection actually fires when the behavior changes.
 - **Excerpts are copied, short and attributed:** a code fence of ≤ 15 lines, preceded by the
   path (and function) it comes from. Use `…` to mark omitted lines.
 - **One learning goal per lesson.** 3–7 minutes of reading. Split anything longer.
