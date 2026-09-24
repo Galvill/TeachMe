@@ -12,7 +12,7 @@ vi.mock("../api", () => ({
   putProgress: vi.fn(),
 }));
 
-import { getCatalog, getProgress } from "../api";
+import { getCatalog, getProgress, putProgress } from "../api";
 
 const catalog: Catalog = {
   project: "acme",
@@ -52,7 +52,7 @@ describe("Home", () => {
       quizzes: {
         "basics-final": {
           attempts: [
-            { context: "standalone", date: "2026-01-01T00:00:00Z", score: 2, total: 4, answers: {} },
+            { context: "course:basics", date: "2026-01-01T00:00:00Z", score: 2, total: 4, answers: {} },
             { context: "standalone", date: "2026-01-02T00:00:00Z", score: 3, total: 4, answers: {} },
           ],
         },
@@ -64,7 +64,7 @@ describe("Home", () => {
     const basics = screen.getByRole("article", { name: "Basics" });
     expect(within(basics).getByText("Start here.")).toBeTruthy();
     expect(within(basics).getByText("3 lessons · 20 min")).toBeTruthy();
-    // 1 attempted quiz of 4 items = 25%
+    // 1 quiz attempted inside the course, of 4 items = 25%; the quiz row's best counts all attempts
     expect(within(basics).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("25");
     const deep = screen.getByRole("article", { name: "Deep dive" });
     expect(within(deep).getByText("1 lesson")).toBeTruthy();
@@ -97,6 +97,87 @@ describe("Home", () => {
     // failed best attempt: score shown without the pass mark
     const quizRow = screen.getByRole("link", { name: /Basics final/ });
     expect(within(quizRow).getByText("1/4")).toBeTruthy();
+  });
+
+  it("course card reset is confirm-gated and reverts the card to 0% Start", async () => {
+    vi.mocked(putProgress).mockResolvedValue(undefined);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    await renderHome({
+      courses: { basics: { visited: ["01-welcome"], lastPage: "01-welcome" } },
+      quizzes: {
+        "basics-final": {
+          attempts: [{ context: "course:basics", date: "2026-01-01T00:00:00Z", score: 3, total: 4, answers: {} }],
+        },
+      },
+    });
+
+    // no control on a course without progress
+    const deep = screen.getByRole("article", { name: "Deep dive" });
+    expect(within(deep).queryByRole("button", { name: /Reset progress/ })).toBeNull();
+
+    const basics = screen.getByRole("article", { name: "Basics" });
+    expect(within(basics).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("50");
+    const reset = within(basics).getByRole("button", { name: "Reset progress in Basics" });
+
+    confirmSpy.mockReturnValueOnce(false);
+    fireEvent.click(reset);
+    expect(within(basics).getByRole("link", { name: "Continue" })).toBeTruthy();
+
+    confirmSpy.mockReturnValueOnce(true);
+    fireEvent.click(reset);
+    const start = await within(basics).findByRole("link", { name: "Start" });
+    expect(start.getAttribute("href")).toBe("/courses/basics");
+    expect(within(basics).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+    expect(within(basics).getByText("0%")).toBeTruthy();
+    expect(within(basics).queryByRole("button", { name: /Reset progress/ })).toBeNull();
+    // the quiz row no longer shows the in-course score
+    const quizRow = screen.getByRole("link", { name: /Basics final/ });
+    expect(within(quizRow).queryByText(/\d+\/\d+/)).toBeNull();
+    confirmSpy.mockRestore();
+  });
+
+  it("after a reset the card reads 0% Start even though the quiz keeps a standalone attempt", async () => {
+    vi.mocked(putProgress).mockResolvedValue(undefined);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await renderHome({
+      courses: { basics: { visited: ["01-welcome"], lastPage: "01-welcome" } },
+      quizzes: {
+        "basics-final": {
+          attempts: [
+            { context: "course:basics", date: "2026-01-01T00:00:00Z", score: 1, total: 4, answers: {} },
+            { context: "standalone", date: "2026-01-02T00:00:00Z", score: 4, total: 4, answers: {} },
+          ],
+        },
+      },
+    });
+
+    const basics = screen.getByRole("article", { name: "Basics" });
+    expect(within(basics).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("50");
+    fireEvent.click(within(basics).getByRole("button", { name: "Reset progress in Basics" }));
+
+    const start = await within(basics).findByRole("link", { name: "Start" });
+    expect(start.getAttribute("href")).toBe("/courses/basics");
+    expect(within(basics).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+    expect(within(basics).queryByRole("button", { name: /Reset progress/ })).toBeNull();
+    // the standalone quiz list still counts the standalone attempt
+    const quizRow = screen.getByRole("link", { name: /Basics final/ });
+    expect(within(quizRow).getByText("4/4 ✓")).toBeTruthy();
+    confirmSpy.mockRestore();
+  });
+
+  it("a standalone attempt alone doesn't start the course", async () => {
+    await renderHome({
+      courses: {},
+      quizzes: {
+        "basics-final": {
+          attempts: [{ context: "standalone", date: "2026-01-02T00:00:00Z", score: 4, total: 4, answers: {} }],
+        },
+      },
+    });
+    const basics = screen.getByRole("article", { name: "Basics" });
+    expect(within(basics).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+    expect(within(basics).getByRole("link", { name: "Start" })).toBeTruthy();
+    expect(within(basics).queryByRole("button", { name: /Reset progress/ })).toBeNull();
   });
 
   it("shows a message when the catalog cannot be loaded", async () => {

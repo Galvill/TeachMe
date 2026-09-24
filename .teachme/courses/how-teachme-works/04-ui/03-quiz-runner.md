@@ -59,7 +59,8 @@ update((p) => addAttempt(p, quiz.slug, attempt));
 `QuizResults` shows the score, "Passed" or "Not passed" against `passingScore`, and an
 expandable ✓/✗ row per question with the learner's answer, the correct answer and the
 explanation. Its buttons depend on context: in a course, **Continue** calls `onContinue`
-(the next TOC item); standalone, **Back to home** plus a link to the quiz's related
+(the next TOC item, or, on the course's last item, a **Back to catalog** button that goes
+to `/`); standalone, **Back to home** plus a link to the quiz's related
 `course`, if it has one.
 
 ## Key takeaways
