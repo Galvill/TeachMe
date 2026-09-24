@@ -374,6 +374,9 @@ describe("CourseView", () => {
     fireEvent.click(reset);
     expect(await screen.findByRole("link", { name: "Start" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Reset progress/ })).toBeNull();
+    // the standalone attempt kept at sec-quiz doesn't count toward the course
+    const sidebar = within(document.getElementById("course-toc")!);
+    expect(sidebar.getByRole("progressbar", { name: "Basics progress" }).getAttribute("aria-valuenow")).toBe("0");
 
     await waitFor(() => expect(putProgress).toHaveBeenCalled());
     const saved = vi.mocked(putProgress).mock.calls.at(-1)![0];

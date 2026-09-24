@@ -75,8 +75,11 @@ The functions passed to `update` live in `src/progress.ts` and are pure: `markVi
 `resetCourse()` drops a course's visited pages and only the attempts its quizzes got with
 context `course:<slug>`: progress is keyed by quiz slug, so standalone attempts, or another
 course's, at the same quiz are kept. The same file computes
-display values: `coursePercent()` counts visited pages plus quizzes with at least one
-attempt, over all TOC items, and `bestAttempt()` picks the highest score ratio.
+display values. `coursePercent()`, and `summaryPercent()` on the Home card, count visited
+pages plus quizzes with at least one attempt made *inside this course* (context
+`course:<slug>`), over all TOC items. A standalone attempt therefore never moves a course
+off 0%, and a reset course always reads 0% and **Start**. `bestAttempt()` picks the highest
+score ratio over all of a quiz's attempts, as the Quizzes list shows.
 
 ## Key takeaways
 

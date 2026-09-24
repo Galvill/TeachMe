@@ -69,6 +69,26 @@ describe("coursePercent", () => {
   it("empty toc returns 0", () => {
     expect(coursePercent([], emptyProgress, "intro")).toBe(0);
   });
+
+  it("counts a quiz only for attempts made inside this course", () => {
+    const toc: TocItem[] = [
+      { type: "page", path: "p1", title: "P1", section: null },
+      { type: "quiz", path: "q1", title: "Q1", section: null, quizSlug: "quiz-1" },
+    ];
+    const elsewhere: ProjectProgress = {
+      courses: {},
+      quizzes: {
+        "quiz-1": {
+          attempts: [
+            { context: "standalone", date: "2026-01-01", score: 1, total: 1, answers: {} },
+            { context: "course:other", date: "2026-01-02", score: 1, total: 1, answers: {} },
+          ],
+        },
+      },
+    };
+    expect(coursePercent(toc, elsewhere, "intro")).toBe(0);
+    expect(coursePercent(toc, elsewhere, "other")).toBe(50);
+  });
 });
 
 describe("bestAttempt", () => {
@@ -122,6 +142,22 @@ describe("summaryPercent", () => {
     expect(summaryPercent(s, p)).toBe(100);
   });
 
+  it("ignores standalone and other-course attempts", () => {
+    const s: CourseSummary = { slug: "intro", title: "Intro", description: "", duration: null, pageCount: 1, quizzes: ["quiz-1"] };
+    const p: ProjectProgress = {
+      courses: {},
+      quizzes: {
+        "quiz-1": {
+          attempts: [
+            { context: "standalone", date: "2026-01-01", score: 1, total: 1, answers: {} },
+            { context: "course:other", date: "2026-01-02", score: 1, total: 1, answers: {} },
+          ],
+        },
+      },
+    };
+    expect(summaryPercent(s, p)).toBe(0);
+  });
+
   it("is 0 when the denominator is 0", () => {
     const s: CourseSummary = { slug: "empty", title: "Empty", description: "", duration: null, pageCount: 0, quizzes: [] };
     expect(summaryPercent(s, emptyProgress)).toBe(0);
@@ -167,6 +203,24 @@ describe("resetCourse", () => {
     ];
     expect(coursePercent(toc, base, "intro")).toBe(100);
     expect(coursePercent(toc, resetCourse(base, "intro", ["intro-quiz"]), "intro")).toBe(0);
+  });
+
+  it("reads 0% after a reset even when the quiz keeps standalone attempts", () => {
+    const toc: TocItem[] = [
+      { type: "page", path: "p1", title: "P1", section: null },
+      { type: "quiz", path: "_quiz/shared", title: "Shared", section: null, quizSlug: "shared" },
+    ];
+    const s: CourseSummary = { slug: "intro", title: "Intro", description: "", duration: null, pageCount: 1, quizzes: ["shared"] };
+    const before: ProjectProgress = {
+      courses: { intro: { visited: ["p1"], lastPage: "p1" } },
+      quizzes: { shared: { attempts: [inCourse("intro"), standalone] } },
+    };
+    expect(coursePercent(toc, before, "intro")).toBe(100);
+    const after = resetCourse(before, "intro", ["shared"]);
+    expect(after.quizzes.shared.attempts).toEqual([standalone]);
+    expect(coursePercent(toc, after, "intro")).toBe(0);
+    expect(summaryPercent(s, after)).toBe(0);
+    expect(hasCourseProgress(after, "intro", ["shared"])).toBe(false);
   });
 
   it("is a no-op for a course with no progress", () => {

@@ -22,7 +22,8 @@ export default function ResetCourseButton({ courseSlug, courseTitle, quizSlugs }
     const message =
       `Reset your progress in "${courseTitle}"?\n\n` +
       "This clears the lessons marked as visited and the quiz attempts made inside this course. " +
-      "Attempts at the same quizzes taken on their own or from another course are kept. This can't be undone.";
+      "Attempts at the same quizzes taken on their own or from another course are kept, and don't count toward this course. " +
+      "This can't be undone.";
     if (!window.confirm(message)) return;
     update((p) => resetCourse(p, courseSlug, quizSlugs));
   }
