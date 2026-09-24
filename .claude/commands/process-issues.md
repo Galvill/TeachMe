@@ -1,18 +1,18 @@
 ---
-description: Drain the open GitHub issue queue via parallel worktree subagents into an integration branch, gate it on the packaged-product integration gate and a browser smoke, then open one integration→master PR for human review
+description: Drain the open GitHub issue queue via parallel worktree subagents into an integration branch, gate it on the packaged-product integration gate and a browser smoke, then open one integration→main PR for human review
 ---
 
 # /process-issues
 
 You are the **main orchestrator** for an issue-driven development loop on TeachMe. The repo's open GitHub issues are the work backlog. Your job is to drain that backlog using parallel coder subagents in isolated worktrees, an independent re-verification and a code review per PR.
 
-All per-issue PRs merge into a shared **integration branch** — never directly into `master`. When the queue is drained, you run the **integration gate** against the integration branch (Phase 7), and only once it is green do you open a **single integration→master PR** and stop: merging that PR is the human's job. You never merge anything into `master` yourself, and you never use `--admin` to bypass branch protection. The human merges the integration PR with a **merge commit, never squash**: release-please builds the version bump and changelog from every conventional commit reachable on `master`, so the merge commit carries each unit's squash onto `master` as its own changelog line, while a squash of the integration PR collapses the whole run into one entry.
+All per-issue PRs merge into a shared **integration branch** — never directly into `main`. When the queue is drained, you run the **integration gate** against the integration branch (Phase 7), and only once it is green do you open a **single integration→main PR** and stop: merging that PR is the human's job. You never merge anything into `main` yourself, and you never use `--admin` to bypass branch protection. The human merges the integration PR with a **merge commit, never squash**: release-please builds the version bump and changelog from every conventional commit reachable on `main`, so the merge commit carries each unit's squash onto `main` as its own changelog line, while a squash of the integration PR collapses the whole run into one entry.
 
 You do NOT write code yourself. You dispatch subagents and track state.
 
 ## Testing model
 
-TeachMe has no service stack and no fixed-port test environment: everything runs locally in seconds, and every test uses temp dirs and port 0. `.github/workflows/ci.yml` runs the `verify` job (the suite below, on Node 20 and the current LTS) on every PR push. `.github/workflows/pr-title.yml` runs the `pr-title` job (conventional-commit title, which becomes the squash subject release-please reads) on every push and on every title or body edit. PRs into `master` additionally get the `gate` job, which runs `.claude/scripts/integration-gate.sh`. Rulesets make these checks required, on the PR's head *as merged with the current base*: `master` requires `verify (20)`, `verify (lts/*)`, `gate` and `pr-title`, and `integration/**` requires the same set without `gate`. Both require the branch to be up to date with its base before it merges. A green result from before the base moved doesn't count. So:
+TeachMe has no service stack and no fixed-port test environment: everything runs locally in seconds, and every test uses temp dirs and port 0. `.github/workflows/ci.yml` runs the `verify` job (the suite below, on Node 20 and the current LTS) on every PR push. `.github/workflows/pr-title.yml` runs the `pr-title` job (conventional-commit title, which becomes the squash subject release-please reads) on every push and on every title or body edit. PRs into `main` additionally get the `gate` job, which runs `.claude/scripts/integration-gate.sh`. Rulesets make these checks required, on the PR's head *as merged with the current base*: `main` requires `verify (20)`, `verify (lts/*)`, `gate` and `pr-title`, and `integration/**` requires the same set without `gate`. Both require the branch to be up to date with its base before it merges. A green result from before the base moved doesn't count. So:
 
 - **Per unit — the verification suite, run twice.** The coder runs it and writes a receipt; CI's `verify` job re-runs it independently on the PR head (Phase 3 step 1). CI is the evidence; the receipt is only the first filter.
 - **Once, at Phase 7 — the integration gate.** It covers what the per-unit suite structurally cannot: the product as a user installs it (packed tarball, `files` field, built `dist/`), the CLI and live HTTP server end to end, rendering in a real browser, cross-unit interactions, and whether the dogfood course still tells the truth about the code. Parts of it run again in CI's `gate` job on the integration PR; the browser smoke and the dogfood decision only run here.
@@ -44,20 +44,20 @@ Print these counters in the final summary.
 
 **0a. Resolve the integration branch.** Reuse before create, so an interrupted run resumes instead of forking:
 
-1. `gh pr list --state open --base master --json number,headRefName --jq '.[] | select(.headRefName | startswith("integration/"))'` — if an open integration→master PR exists, its head branch is `integration`, and it is **frozen**: it passed the Phase 7 gate and the human is testing exactly that branch. Stack onto it only a unit the user has named explicitly; otherwise stop and tell the user the queue is waiting on their merge — do NOT stack the rest of the backlog onto it, and do NOT fork a second integration branch. This check runs ONLY on the first Phase 0 pass of a run; a Phase 6 re-entry reuses the bound `integration` unconditionally.
+1. `gh pr list --state open --base main --json number,headRefName --jq '.[] | select(.headRefName | startswith("integration/"))'` — if an open integration→main PR exists, its head branch is `integration`, and it is **frozen**: it passed the Phase 7 gate and the human is testing exactly that branch. Stack onto it only a unit the user has named explicitly; otherwise stop and tell the user the queue is waiting on their merge — do NOT stack the rest of the backlog onto it, and do NOT fork a second integration branch. This check runs ONLY on the first Phase 0 pass of a run; a Phase 6 re-entry reuses the bound `integration` unconditionally.
 2. Else, `git ls-remote --heads origin 'integration/*'` — if exactly one exists, reuse it. If several exist, surface them to the user and stop (don't guess which is live).
-3. Else create it from master and push:
+3. Else create it from main and push:
    ```
-   git fetch origin master
-   git push origin origin/master:refs/heads/integration/issues-<YYYY-MM-DD>
+   git fetch origin main
+   git push origin origin/main:refs/heads/integration/issues-<YYYY-MM-DD>
    ```
    (append `-2`, `-3`, … if the name is taken).
 
-If you're reusing an existing branch and `master` has advanced (`git merge-base --is-ancestor origin/master origin/<integration>` fails), sync it with a **master-sync PR**. The `integration-branches` ruleset rejects direct pushes of commits that lack passing checks, so every change to an integration branch goes through a PR. Creating the branch is the exception, since the ruleset doesn't enforce on create.
+If you're reusing an existing branch and `main` has advanced (`git merge-base --is-ancestor origin/main origin/<integration>` fails), sync it with a **main-sync PR**. The `integration-branches` ruleset rejects direct pushes of commits that lack passing checks, so every change to an integration branch goes through a PR. Creating the branch is the exception, since the ruleset doesn't enforce on create.
 
-1. `git push origin origin/master:refs/heads/sync/master-into-<integration-slug>`.
-2. `gh pr create --base <integration> --head sync/master-into-<integration-slug> --title "chore: merge master into <integration>" --body "Syncs master into the integration branch."`
-3. Its head is `master`'s tip, so the PR starts `BEHIND` whenever the integration branch has commits `master` lacks, which is nearly always. Run `gh api -X PUT repos/GalVill/TeachMe/pulls/<n>/update-branch` straight away; the sync branch is unprotected. Wait for CI on the new head. Before merging, confirm `gh pr view <n> --json mergeStateStatus --jq .mergeStateStatus` is not `BEHIND`; if it is, update again. Then run `gh pr merge <n> --merge --delete-branch`. Use a **merge commit, not a squash**, so `master`'s commits become ancestors of the integration branch.
+1. `git push origin origin/main:refs/heads/sync/main-into-<integration-slug>`.
+2. `gh pr create --base <integration> --head sync/main-into-<integration-slug> --title "chore: merge main into <integration>" --body "Syncs main into the integration branch."`
+3. Its head is `main`'s tip, so the PR starts `BEHIND` whenever the integration branch has commits `main` lacks, which is nearly always. Run `gh api -X PUT repos/GalVill/TeachMe/pulls/<n>/update-branch` straight away; the sync branch is unprotected. Wait for CI on the new head. Before merging, confirm `gh pr view <n> --json mergeStateStatus --jq .mergeStateStatus` is not `BEHIND`; if it is, update again. Then run `gh pr merge <n> --merge --delete-branch`. Use a **merge commit, not a squash**, so `main`'s commits become ancestors of the integration branch.
 4. If GitHub reports the PR as conflicting, dispatch a `remediator` worktree agent on the sync branch to merge `<integration>` into it and resolve. Do not resolve conflicts yourself.
 
 Ensure the loop's labels exist (the repo starts with GitHub's defaults only); create any that are missing:
@@ -126,8 +126,8 @@ While there are unworked units AND a free slot:
    - `description`: `"code #<lowest>: <short slug>"`
    - `prompt`: include all of the following:
      - Issue numbers + full bodies (paste from Phase 0 JSON).
-     - Branch name to create: `issues/<lowest-number>-<short-slug>`, branched **from `origin/<integration>`** (NOT from master).
-     - PR must target the integration branch: `gh pr create --base <integration> ...`, body referencing issues as `Refs #<n>` (NOT `Closes #<n>` — closing keywords only fire on merges to the default branch, so `Closes` belongs in the final integration→master PR).
+     - Branch name to create: `issues/<lowest-number>-<short-slug>`, branched **from `origin/<integration>`** (NOT from main).
+     - PR must target the integration branch: `gh pr create --base <integration> ...`, body referencing issues as `Refs #<n>` (NOT `Closes #<n>` — closing keywords only fire on merges to the default branch, so `Closes` belongs in the final integration→main PR).
      - The **verification suite** above, verbatim, plus: "Before running `gh pr create`, every point must be green from your worktree. If your change only shows in a real browser or only through the installed tarball, say so in the PR body under `Gate notes`."
      - Final instruction: "Before returning, make sure the receipt at /tmp/teachme-verify/<branch-slug>.log ends `RESULT PASS`. When that's true and the PR is opened, return exactly: `PR=<number> BRANCH=<name>`. Do not return prose."
 3. Mark the slot as **owned by this coder** until it returns. Record the coder's agent id/name — Phase 3 routes remediation back to this same agent while it is still resumable.
@@ -161,7 +161,7 @@ When a coder returns:
 **4.** If `verdict == clean` AND CI is green:
    - **Up-to-date check.** Run `gh pr view <n> --json mergeStateStatus --jq .mergeStateStatus`. If it is `BEHIND`, the integration branch moved after CI ran (usually another slot merged), so the green result no longer covers what would merge. Update the branch with `gh api -X PUT repos/GalVill/TeachMe/pulls/<n>/update-branch`. It merges the base into the PR branch on GitHub, needs no worktree, and triggers a fresh CI run. Then go back to (1) and poll CI on the new head. The review stands, because the PR's own diff hasn't changed. If the update fails with a merge conflict, route to remediation as for a conflicted merge below. The slot's worktree agent must `git pull` before its next push, because the branch moved on GitHub.
    - `gh pr merge <n> --squash --delete-branch` — this merges into the **integration branch**. Plain merge only: if it is blocked by policy, STOP and surface the blocker; do NOT retry with `--admin`. If it fails for conflicts, treat it like a verification failure: remediation rebases onto the integration branch, re-verifies, pushes, and the slot goes back through (0)–(2).
-   - Comment on each referenced issue: `gh issue comment <issue> --body "Implemented in PR #<n>; staged on <integration>. Closes via the integration PR to master."`
+   - Comment on each referenced issue: `gh issue comment <issue> --body "Implemented in PR #<n>; staged on <integration>. Closes via the integration PR to main."`
    - Leave `agent-wip` ON — the issues stay open until the human merges the integration PR, and the label stops the next Phase 0 pass from re-dispatching them.
    - Append the PR to `merged`. **Free the slot.**
 
@@ -190,11 +190,11 @@ If a subagent's return text references a newly filed issue (e.g. "filed #25"), a
 
 After any slot frees (via merge or escalation), go back to Phase 0. When Phase 0 finds nothing actionable and no slot is in flight, go to Phase 7.
 
-## Phase 7 — Finalize: integration gate, then one integration→master PR
+## Phase 7 — Finalize: integration gate, then one integration→main PR
 
-- If `merged` is empty this run AND the integration branch has no commits ahead of master (`git rev-list --count origin/master..origin/<integration>` is 0), there is nothing to hand off. Delete the integration branch if this run created it, then print the final output with `Integration PR: none`.
+- If `merged` is empty this run AND the integration branch has no commits ahead of main (`git rev-list --count origin/main..origin/<integration>` is 0), there is nothing to hand off. Delete the integration branch if this run created it, then print the final output with `Integration PR: none`.
 - Otherwise:
-  1. **Integration gate — all four parts, on the integration branch, BEFORE creating or updating the integration→master PR.** This is the first time the units run together, and the first time anything exercises the installed product or a real browser. Check the landed PRs' `Gate notes` sections before starting — they are the pre-declared triage hints. None of the parts may be skipped without the user saying so.
+  1. **Integration gate — all four parts, on the integration branch, BEFORE creating or updating the integration→main PR.** This is the first time the units run together, and the first time anything exercises the installed product or a real browser. Check the landed PRs' `Gate notes` sections before starting — they are the pre-declared triage hints. None of the parts may be skipped without the user saying so.
      - Materialize the branch: `git fetch origin` then `git worktree add --detach /tmp/teachme-gate-<integration-slug> origin/<integration>` (remove a stale worktree at that path first). Run everything below from that worktree. No lock is needed: nothing here binds a fixed port or touches `~/.TeachMe`.
 
      **(a) Packaged-product gate.** Run `.claude/scripts/integration-gate.sh` from the gate worktree (foreground, 600000ms timeout), or dispatch a `test-runner` to run it and return its output. It runs `npm ci`, the full suite, `npm pack` and installs the tarball into a temp prefix, then drives the INSTALLED binary: `--help`, `validate` on the shipped example and the dogfood content, `status --json`, and a live server on port 0 probed for the UI shell, `/api/catalog`, `/api/courses/:slug`, `/content/*`, a 404 for an unknown API path, four `/content` traversal variants that must not leak `package.json`, and a progress PUT/GET round-trip that must land in its temp `TEACHME_HOME`. It prints a receipt and ends `RESULT PASS` or `RESULT FAIL`.
@@ -223,16 +223,16 @@ After any slot frees (via merge or escalation), go back to Phase 0. When Phase 0
      - End with a `Suggested focus order:` line.
      - Plain markdown bullets under a `## Testing focus` heading, 15–30 lines total.
      Save it to the scratchpad; it goes verbatim into the integration PR body AND into the final output.
-  3. Check for an existing open integration→master PR (same query as Phase 0a). If one exists, update its body with `gh api -X PATCH repos/GalVill/TeachMe/pulls/<n> -F body=@<file>` to include this run's PRs and issues instead of opening a duplicate.
+  3. Check for an existing open integration→main PR (same query as Phase 0a). If one exists, update its body with `gh api -X PATCH repos/GalVill/TeachMe/pulls/<n> -F body=@<file>` to include this run's PRs and issues instead of opening a duplicate.
   4. Else open one:
      ```
-     gh pr create --base master --head <integration> --title "chore: drain issue backlog — <K> reviewed and gated PRs" --body-file <file>
+     gh pr create --base main --head <integration> --title "chore: drain issue backlog — <K> reviewed and gated PRs" --body-file <file>
      ```
      The title type is `chore` on purpose: `chore` is a hidden changelog section in `release-please-config.json`, and the changelog entries come from the unit commits the merge commit carries, so a `fix:` or `feat:` umbrella title would add a bogus line and a spurious version bump on top of them.
      Body must contain: one line per landed PR — `- #<pr>: <title> — Refs #<issue>`; the `## Testing focus` section, verbatim, directly after that list; a `Closes #<n>` line for every resolved issue so they auto-close on merge; a `## Gate` section listing parts (a)–(d) with their result, the gate receipt from (a), and the browser-smoke checklist as run; and a closing line `Merge with a merge commit, not squash — release-please reads the unit commits.`
-  5. Wait for CI on the integration PR (`ScheduleWakeup`, 300s). If `master` has moved since the gate ran, `mergeStateStatus` is `BEHIND`. Sync `master` in with a master-sync PR as in Phase 0a, which re-runs CI, and re-run the step-1 gate on the new head. Its `gate` job re-runs part (a) on GitHub's runner, so it should pass on the strength of step 1; a failure there is usually an environment difference (Node version, a missing system tool). Fix it with gate-fix PRs as in step 1 until green, and if that pushes new commits, re-run the step-1 gate before considering Phase 7 done.
+  5. Wait for CI on the integration PR (`ScheduleWakeup`, 300s). If `main` has moved since the gate ran, `mergeStateStatus` is `BEHIND`. Sync `main` in with a main-sync PR as in Phase 0a, which re-runs CI, and re-run the step-1 gate on the new head. Its `gate` job re-runs part (a) on GitHub's runner, so it should pass on the strength of step 1; a failure there is usually an environment difference (Node version, a missing system tool). Fix it with gate-fix PRs as in step 1 until green, and if that pushes new commits, re-run the step-1 gate before considering Phase 7 done.
   6. **Do NOT merge it. Do NOT approve it. Do NOT use `--admin`.** Gated + open = done; the merge decision belongs to the human.
-  7. After the human merges, release-please opens or updates its `chore(master): release <version>` PR on its own. That PR is the human's too: never merge, edit or close it, and never push to a `release-please--*` branch.
+  7. After the human merges, release-please opens or updates its `chore(main): release <version>` PR on its own. That PR is the human's too: never merge, edit or close it, and never push to a `release-please--*` branch.
 
 ## Final output
 
@@ -262,11 +262,11 @@ Then print the `## Testing focus` section verbatim, so the human can plan manual
 - A fresh worktree agent returning `BLOCKED: branch ... already checked out in worktree ...` means Remediation routing was skipped: `SendMessage` the owning agent instead.
 - Issues intentionally stay open with `agent-wip` after their PR lands on the integration branch; they close when the human merges the integration PR.
 - If a run crashes mid-flight, leftover `agent-wip` labels on issues whose PRs never landed are stale — check whether each issue's PR is on the integration branch, then clear with `gh issue edit <n> --remove-label agent-wip`.
-- A stale integration branch from an abandoned run (no open PR, master has moved on): delete it manually (`git push origin --delete integration/...`) — Phase 0a stops rather than guessing when several exist.
+- A stale integration branch from an abandoned run (no open PR, main has moved on): delete it manually (`git push origin --delete integration/...`) — Phase 0a stops rather than guessing when several exist.
 - release-please opens its release PR with a GitHub App token (`vars.RELEASE_APP_CLIENT_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`), so CI runs on it and the checks `protect-main` requires can pass. If that variable isn't set, the workflow falls back to `GITHUB_TOKEN`, and the release PR shows no CI checks and can only merge with a bypass. Its diff is only `package.json`, `package-lock.json`, `CHANGELOG.md` and `.release-please-manifest.json`.
 - Leftover `/tmp/pr<n>-verify` or `/tmp/teachme-gate-*` worktrees from a crashed run: `git worktree remove --force <path>` then `git worktree prune`; the `branch-janitor` agent also sweeps them.
 - Gate failures come in three flavors: packaging (a module or asset missing from the tarball — the tests passed from the source tree but the installed binary fails), rendering (visible only in the browser smoke), and cross-unit (two units each green alone: a `shared/types.d.ts` shape one side changed, a validation message one side reworded that the other's test asserts). Point the remediator at the specific part's output, not just "gate failed".
-- Merges are one at a time by design. Every merge into the integration branch makes the other open unit PRs `BEHIND`, and each one needs an update-branch and a fresh CI run (about a minute) before it can merge. If `gh pr merge` fails with "the head branch is not up to date with the base branch", the up-to-date check was skipped: Phase 3 step 4 for a unit or gate-fix PR, Phase 0a step 3 for a master-sync PR.
-- `git push` to `integration/**` failing with `GH013: Repository rule violations` / "Required status check … is expected" means a step pushed directly. Route that change through a PR (a master-sync PR or a gate-fix PR). Creating a new integration branch is exempt.
+- Merges are one at a time by design. Every merge into the integration branch makes the other open unit PRs `BEHIND`, and each one needs an update-branch and a fresh CI run (about a minute) before it can merge. If `gh pr merge` fails with "the head branch is not up to date with the base branch", the up-to-date check was skipped: Phase 3 step 4 for a unit or gate-fix PR, Phase 0a step 3 for a main-sync PR.
+- `git push` to `integration/**` failing with `GH013: Repository rule violations` / "Required status check … is expected" means a step pushed directly. Route that change through a PR (a main-sync PR or a gate-fix PR). Creating a new integration branch is exempt.
 - `pr-title` lives in its own workflow on purpose. When a job is skipped, GitHub still posts a check run for it that counts as passing, and the latest check run of each name wins. If `ci.yml` ran on `edited` events, a body edit would post skipped `gate`/`verify` runs over a failed real result.
 - The GitHub CLI's own PR-edit subcommand fails on this repo with a GraphQL "Projects (classic) is being deprecated" error (it touches `projectCards` even for a plain title/body edit), so every title or body fix above uses the REST form instead: `gh api -X PATCH repos/GalVill/TeachMe/pulls/<n> -f title="..."` or `-F body=@<file>`.
