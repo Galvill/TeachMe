@@ -207,11 +207,16 @@ describe("CourseView", () => {
     expect(within(pager).getByText("← Welcome")).toBeTruthy();
     expect(within(pager).getByText("Quizzes →")).toBeTruthy();
 
+    // Under full-suite parallel load, the microtask chain behind this navigation
+    // (mocked getPage resolving, React committing, router updating) can take
+    // longer than Testing Library's default 1000ms findBy* timeout even though
+    // nothing is actually broken. Give these two post-navigation assertions
+    // more headroom rather than raising the global default (see #8).
     fireEvent.keyDown(document, { key: "ArrowRight" });
-    await screen.findByRole("heading", { level: 1, name: "Quizzes" });
+    await screen.findByRole("heading", { level: 1, name: "Quizzes" }, { timeout: 5000 });
 
     fireEvent.keyDown(document, { key: "ArrowLeft" });
-    await screen.findByRole("heading", { level: 1, name: "Pages" });
+    await screen.findByRole("heading", { level: 1, name: "Pages" }, { timeout: 5000 });
   });
 
   it("arrow keys ignored in input", async () => {
