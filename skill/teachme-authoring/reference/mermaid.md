@@ -36,10 +36,13 @@ that renderer:
   in this renderer. The one subgraph diagram that shipped showed up for one user as grey
   container boxes holding tiny, unlabeled nodes. Show grouping with node labels instead
   (`toc1["TOC: Quizzes"]`), or split the diagram in two.
-- **No HTML in labels** (`<br/>`, `<b>`, `<i>` …). With SVG-text labels, markup is not
-  rendered as HTML, so a label that relies on it will not look as written. Mermaid wraps
-  long labels by itself (at about 200px). Keep labels short, and move detail into an edge
-  label (`A -->|"quiz: slug"| B`) or into the prose around the diagram.
+- **No HTML in labels** (`<br/>`, `<b>`, `<i>` …). With SVG-text labels, formatting
+  tags like `<b>` and `<i>` are not applied: they appear literally, angle brackets and
+  all. `<br/>` does still break the line, but the line breaks it makes are hard-coded,
+  and they stack on top of Mermaid's own wrapping.
+- **Keep labels short.** SVG-text labels wrap at about 200px, and a long unbroken token
+  such as a file path is split mid-word (`01-courses-an` / `d-pages.md`). Move detail
+  into an edge label (`A -->|"quiz: slug"| B`) or into the prose around the diagram.
 
 ### flowchart
 
@@ -117,8 +120,8 @@ Every relationship needs a `: label`. Attributes are `type name`.
 4. In flowcharts, a node id starting with `o` or `x` right after `--` becomes an edge
    shape (`A--oB`). Put a space around the arrow: `A --> oB`.
 5. Inside a quoted label, write a double quote as `#quot;`. Don't force line
-   breaks with `<br/>`: labels are SVG text and Mermaid wraps them itself (see "Avoid
-   subgraphs and HTML labels").
+   breaks with `<br/>`. It works, but Mermaid already wraps labels at about 200px, and
+   the two stack up. Shorten the label instead (see "Avoid subgraphs and HTML labels").
 6. In `sequenceDiagram` message text, a `;` ends the statement: write `#59;` instead.
 7. The fence info string is exactly `mermaid` (lowercase), and the block is not empty.
 8. No `click` directives or scripts: `securityLevel: "strict"` blocks them.
