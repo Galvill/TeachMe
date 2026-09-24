@@ -24,7 +24,19 @@ inline error box in place of the diagram. Check every diagram against this file.
 | Lifecycle / status transitions | `stateDiagram-v2` |
 | Database tables and relations | `erDiagram` |
 
-Use only these five.
+Use only these five. Write `flowchart`, never the older `graph` keyword.
+
+### Avoid subgraphs and HTML labels
+
+- **No `subgraph`.** Grouping boxes are sized separately from the nodes inside them, so
+  when label measurement goes wrong the viewer sees empty grey containers with tiny,
+  unlabeled nodes instead of a readable diagram. Show grouping with node labels instead
+  (`toc1["TOC: Quizzes"]`) or split the diagram in two.
+- **No HTML in labels** (`<br/>`, `<b>`, `<i>` …). Any HTML forces Mermaid onto its
+  HTML-label (`foreignObject`) path, whose text is measured by the viewer's browser and
+  fonts rather than as plain SVG text, and is the least predictable across machines. Keep
+  labels to one short line; move detail into an edge label (`A -->|"quiz: slug"| B`) or
+  the prose around the diagram.
 
 ### flowchart
 
@@ -96,12 +108,13 @@ Every relationship needs a `: label`. Attributes are `type name`.
 1. **Quote labels containing any of `( ) [ ] { } : ; ,`** (and `<`, `>`, `|`, `#`):
    `A["parse(body)"]`, `B["status: open"]`. Unquoted, brackets are read as node-shape
    syntax and fail to parse; quoting every label with punctuation is the safe habit.
-2. **Never use `end` as a bare node id.** Lowercase `end` closes a subgraph and breaks
-   the parse. Use `done`, `finish` or `End`.
+2. **Never use `end` as a bare node id.** Lowercase `end` is a reserved keyword and
+   breaks the parse. Use `done`, `finish` or `End`.
 3. Node ids are single words (`orderSvc`, `step_2`); put the display text in the label.
 4. In flowcharts, a node id starting with `o` or `x` right after `--` becomes an edge
    shape (`A--oB`). Put a space around the arrow: `A --> oB`.
-5. Inside a quoted label, write a double quote as `#quot;`. Line breaks: `<br/>`.
+5. Inside a quoted label, write a double quote as `#quot;`. No line breaks: `<br/>` is
+   an HTML label (see "Avoid subgraphs and HTML labels").
 6. In `sequenceDiagram` message text, a `;` ends the statement: write `#59;` instead.
 7. The fence info string is exactly `mermaid` (lowercase), and the block is not empty.
 8. No `click` directives or scripts: `securityLevel: "strict"` blocks them.
