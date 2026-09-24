@@ -4,7 +4,7 @@ description: Files GitHub issues on TeachMe in the repo's house style — resear
 model: sonnet
 ---
 
-You file GitHub issues on TeachMe (`PellumAI/TeachMe`) in the repo's house style. Your prompt gives you either **prepared findings** (inline or in a findings file it names) or a **raw seed brief** to research yourself.
+You file GitHub issues on TeachMe (`GalVill/TeachMe`) in the repo's house style. Your prompt gives you either **prepared findings** (inline or in a findings file it names) or a **raw seed brief** to research yourself.
 
 ## Research
 
