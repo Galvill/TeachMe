@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0](https://github.com/Galvill/TeachMe/compare/v1.0.1...v1.1.0) (2026-09-24)
+
+
+### Features
+
+* add --version/-v flag to teachme CLI ([#27](https://github.com/Galvill/TeachMe/issues/27)) ([4d5212a](https://github.com/Galvill/TeachMe/commit/4d5212abb2d037ed5d8472b327f4fb9d8f2d4d06)), closes [#15](https://github.com/Galvill/TeachMe/issues/15)
+* course progress reset, header TOC toggle and back-to-catalog at course end ([#28](https://github.com/Galvill/TeachMe/issues/28)) ([793df57](https://github.com/Galvill/TeachMe/commit/793df57bed7d4bef1b59274bc48d3b84425f488b)), closes [#21](https://github.com/Galvill/TeachMe/issues/21)
+
+
+### Documentation
+
+* add MIT license file and a contribution guide ([#29](https://github.com/Galvill/TeachMe/issues/29)) ([ee00706](https://github.com/Galvill/TeachMe/commit/ee00706230e9938680acd584c7e18d1ece691fbf)), closes [#20](https://github.com/Galvill/TeachMe/issues/20)
+* add topic ideas and code-first sourcing guidance to authoring skill ([#26](https://github.com/Galvill/TeachMe/issues/26)) ([03ec298](https://github.com/Galvill/TeachMe/commit/03ec2987b1a9abfae0c135ad396fb7a036f50282)), closes [#17](https://github.com/Galvill/TeachMe/issues/17) [#23](https://github.com/Galvill/TeachMe/issues/23)
+* update dogfood course for integration/issues-2026-09-24 ([#30](https://github.com/Galvill/TeachMe/issues/30)) ([bc03f19](https://github.com/Galvill/TeachMe/commit/bc03f1918f9a02345c8f635a7a49480b64af943c))
+
 ## [1.0.1](https://github.com/GalVill/TeachMe/compare/v1.0.0...v1.0.1) (2026-09-24)
 
 
