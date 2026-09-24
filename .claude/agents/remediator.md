@@ -18,7 +18,7 @@ Every install, build and test command runs in the FOREGROUND with an explicit `t
 - `git fetch origin` first. Verify you are on the expected branch before any mutation (`git rev-parse --abbrev-ref HEAD`); never chain worktree creation and commits in one compound command. Run `npm ci` if the worktree has no `node_modules/` or the lockfile changed.
 - Rebase onto the integration branch named in your prompt (or merge it in if the rebase is unreasonably hairy — say which you did). When resolving conflicts, BOTH intents must survive: what the integration branch already landed AND what this PR adds. Where both sides touched the same code, express this PR's change in terms of the integration branch's newer helpers. Conflicts in `shared/types.d.ts` and `skill/teachme-authoring/reference/format.md` need both sides' entries, not one side's.
 - Push with `git push --force-with-lease` after a rebase; plain push otherwise.
-- A CI `pr-title` failure is fixed with `gh pr edit <n> --title`, not a commit.
+- A CI `pr-title` failure is fixed with `gh api -X PATCH repos/PellumAI/TeachMe/pulls/<n> -f title="<type>: <subject>"`, not a commit — the GitHub CLI's own PR-edit subcommand fails on this repo (see process-issues.md Troubleshooting).
 - Never expand scope beyond the conflict, verification or review findings you were given. File unrelated discoveries as new issues with `gh issue create`.
 - The invariants and content-contract obligations in `.claude/agents/coder.md` apply to your changes too.
 - Write your commit message and any scratch files inside YOUR OWN worktree, never the session scratchpad — parallel agents share one scratchpad directory and overwrite each other there. Files handed to you under the scratchpad are read-only inputs.
