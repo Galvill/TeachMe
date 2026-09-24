@@ -17,9 +17,20 @@ const HELP = `Usage:
   teachme status [dir]     Report content that went stale since it was synced
     --json                  Print machine-readable JSON instead of text
   teachme --help           Show this help
+  teachme --version, -v    Print the installed teachme version
 `;
 
 const DEFAULT_DIR = "./.teachme";
+
+/**
+ * Read the `version` field from the installed package's own package.json.
+ * @returns {string}
+ */
+function readPackageVersion() {
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+  return pkg.version;
+}
 
 /**
  * Resolve `dir` (or the default) against `cwd`.
@@ -157,7 +168,7 @@ async function main(argv) {
   const noOpen = argv.includes("--no-open");
   const filteredArgv = argv.filter((arg) => arg !== "--no-open");
 
-  /** @type {{ values: { port?: string; help?: boolean; json?: boolean }; positionals: string[] }} */
+  /** @type {{ values: { port?: string; help?: boolean; json?: boolean; version?: boolean }; positionals: string[] }} */
   let parsed;
   try {
     parsed = parseArgs({
@@ -166,6 +177,7 @@ async function main(argv) {
         port: { type: "string" },
         help: { type: "boolean" },
         json: { type: "boolean" },
+        version: { type: "boolean", short: "v" },
       },
       allowPositionals: true,
     });
@@ -176,6 +188,11 @@ async function main(argv) {
   }
 
   const { values, positionals } = parsed;
+
+  if (values.version) {
+    console.log(readPackageVersion());
+    return;
+  }
 
   if (values.help) {
     console.log(HELP);

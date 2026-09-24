@@ -105,6 +105,7 @@ step "install tarball" npm install --no-audit --no-fund --prefix "$work/inst" "$
 bin="$work/inst/node_modules/.bin/teachme"
 
 step "cli --help" "$bin" --help
+step "cli --version" "$bin" --version
 step "cli validate example" "$bin" validate "$work/inst/node_modules/teachme/skill/teachme-authoring/examples/.teachme"
 step "cli validate dogfood" "$bin" validate "$root/.teachme"
 step "cli status dogfood" "$bin" status "$root/.teachme" --json
