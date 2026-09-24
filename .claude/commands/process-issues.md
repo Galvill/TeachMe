@@ -142,7 +142,7 @@ When a coder returns:
 
 **1. Poll CI** — the independent re-run: `gh pr checks <n>`. Pending → wait for the scheduled wakeup. `gh pr checks` exits non-zero with "no checks reported" for the first seconds after a push; treat that as pending.
    - A `verify` failure → `gh run view <run-id> --log-failed > /tmp/pr-<n>-failed.log` and route per **Remediation routing** with "CI failed on PR #<n>; failed log at /tmp/pr-<n>-failed.log. Fix the cause, re-run the suite, push, return `PR=<n> BRANCH=<b>`." Loop back to (0) when it returns.
-   - A `pr-title` failure → fix the title yourself with `gh pr edit <n> --title "<type>: <subject>"`; it needs no worktree. The title becomes the squash subject, so pick the type release-please should see: `feat` for new user-visible behavior, `fix` for a bug, `docs` for skill or dogfood content, `chore`/`test`/`refactor` for invisible work.
+   - A `pr-title` failure → fix the title yourself with `gh api -X PATCH repos/PellumAI/TeachMe/pulls/<n> -f title="<type>: <subject>"`; it needs no worktree. The title becomes the squash subject, so pick the type release-please should see: `feat` for new user-visible behavior, `fix` for a bug, `docs` for skill or dogfood content, `chore`/`test`/`refactor` for invisible work.
    - A failing test that passes on re-run (`gh run rerun <run-id> --failed`) in a file the PR does not touch → a flake, not a blocker for this PR; file it via `gh issue create` (label `bug`) once per run, append to `filed`, and proceed.
    - If CI never reports checks for the PR (Actions disabled or down), fall back to a `test-runner` agent (`model: sonnet`): "`git -C <repo> fetch origin <branch>`, `git -C <repo> worktree add --detach /tmp/pr<n>-verify origin/<branch>`, from there run `npm ci`, `npm test`, `npm run typecheck`, `npm run build`, `node bin/teachme.js validate .teachme`, `node bin/teachme.js validate skill/teachme-authoring/examples/.teachme`, then `git -C <repo> worktree remove --force /tmp/pr<n>-verify`." Say in the final output that CI was unavailable.
 
@@ -217,7 +217,7 @@ After any slot frees (via merge or escalation), go back to Phase 0. When Phase 0
      - End with a `Suggested focus order:` line.
      - Plain markdown bullets under a `## Testing focus` heading, 15–30 lines total.
      Save it to the scratchpad; it goes verbatim into the integration PR body AND into the final output.
-  3. Check for an existing open integration→master PR (same query as Phase 0a). If one exists, update its body with `gh pr edit <n> --body-file <file>` to include this run's PRs and issues instead of opening a duplicate.
+  3. Check for an existing open integration→master PR (same query as Phase 0a). If one exists, update its body with `gh api -X PATCH repos/PellumAI/TeachMe/pulls/<n> -F body=@<file>` to include this run's PRs and issues instead of opening a duplicate.
   4. Else open one:
      ```
      gh pr create --base master --head <integration> --title "chore: drain issue backlog — <K> reviewed and gated PRs" --body-file <file>
@@ -260,3 +260,4 @@ Then print the `## Testing focus` section verbatim, so the human can plan manual
 - Release PRs opened by release-please use `GITHUB_TOKEN`, and GitHub does not start workflows for PRs a workflow token opens, so the release PR shows no CI checks. That is expected; its diff is only `package.json`, `package-lock.json`, `CHANGELOG.md` and `.release-please-manifest.json`.
 - Leftover `/tmp/pr<n>-verify` or `/tmp/teachme-gate-*` worktrees from a crashed run: `git worktree remove --force <path>` then `git worktree prune`; the `branch-janitor` agent also sweeps them.
 - Gate failures come in three flavors: packaging (a module or asset missing from the tarball — the tests passed from the source tree but the installed binary fails), rendering (visible only in the browser smoke), and cross-unit (two units each green alone: a `shared/types.d.ts` shape one side changed, a validation message one side reworded that the other's test asserts). Point the remediator at the specific part's output, not just "gate failed".
+- The GitHub CLI's own PR-edit subcommand fails on this repo with a GraphQL "Projects (classic) is being deprecated" error (it touches `projectCards` even for a plain title/body edit), so every title or body fix above uses the REST form instead: `gh api -X PATCH repos/PellumAI/TeachMe/pulls/<n> -f title="..."` or `-F body=@<file>`.
