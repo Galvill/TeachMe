@@ -32,7 +32,7 @@ describe("buildStatus", () => {
     const base = headCommit(repo.dir);
     repo.commit(
       {
-        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: ${base}\n---\nIntro.\n`,
+        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: "${base}"\n---\nIntro.\n`,
         ".teachme/courses/arch/01-setup.md":
           "---\ntitle: Setup\nsources:\n  - src/util.js\n---\nBody.\n",
       },
@@ -61,7 +61,7 @@ describe("buildStatus", () => {
     const base = headCommit(repo.dir);
     repo.commit(
       {
-        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: ${base}\n---\nIntro.\n`,
+        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: "${base}"\n---\nIntro.\n`,
         ".teachme/courses/arch/01-setup.md":
           "---\ntitle: Setup\nsources:\n  - src/util.js\n---\nBody.\n",
       },
@@ -101,7 +101,7 @@ describe("buildStatus", () => {
     const base = headCommit(repo.dir);
     repo.commit(
       {
-        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: ${base}\n---\nIntro.\n`,
+        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: "${base}"\n---\nIntro.\n`,
         ".teachme/courses/arch/01-setup.md":
           "---\ntitle: Setup\nsources:\n  - src/util.js\n---\nBody.\n",
       },
@@ -134,7 +134,7 @@ describe("buildStatus", () => {
     const base = headCommit(repo.dir);
     repo.commit(
       {
-        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: ${base}\n---\nIntro.\n`,
+        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: "${base}"\n---\nIntro.\n`,
         ".teachme/courses/arch/01-setup.md":
           "---\ntitle: Setup\nsources:\n  - src/util.js\n---\nBody.\n",
       },
@@ -194,7 +194,7 @@ describe("buildStatus", () => {
     const base = headCommit(repo.dir);
     repo.commit(
       {
-        ".teachme/quizzes/basics/quiz.md": `---\ntitle: Basics\nsyncedCommit: ${base}\n---\nIntro.\n`,
+        ".teachme/quizzes/basics/quiz.md": `---\ntitle: Basics\nsyncedCommit: "${base}"\n---\nIntro.\n`,
         ".teachme/quizzes/basics/01-q.md":
           "---\ntitle: Question one\nsources:\n  - src/util.js\n---\nPrompt?\n\n## Options\n- [x] Yes\n- [ ] No\n",
       },
@@ -236,7 +236,7 @@ describe("formatStatus", () => {
     const base = headCommit(repo.dir);
     repo.commit(
       {
-        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: ${base}\n---\nIntro.\n`,
+        ".teachme/courses/arch/course.md": `---\ntitle: Architecture\nsyncedCommit: "${base}"\n---\nIntro.\n`,
         ".teachme/courses/arch/01-setup.md":
           "---\ntitle: Setup\nsources:\n  - src/util.js\n---\nBody.\n",
       },
