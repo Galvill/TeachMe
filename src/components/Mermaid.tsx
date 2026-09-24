@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTheme } from "../theme";
 
 type Props = { code: string };
@@ -24,16 +24,58 @@ export function appFontFamily(): string {
   return fromCss || FALLBACK_FONT_FAMILY;
 }
 
+/** Mermaid's own `viewBox` margin around the drawn diagram (flowchart `diagramPadding`). */
+const VIEWBOX_PADDING = 8;
+
+/**
+ * Grow an inserted diagram's `viewBox` so it covers everything actually drawn.
+ *
+ * Mermaid computes the `viewBox` once, from `getBBox()` in a detached render
+ * container, and an outer `<svg>` clips whatever falls outside it. If the
+ * diagram paints larger where it is finally shown (a label measured one way
+ * and drawn another), nodes at the right and bottom edges get cut off. This
+ * re-measures in the live page and only ever widens the box, never shrinks it.
+ * Returns whether the `viewBox` changed.
+ */
+export function fitViewBox(svg: SVGSVGElement): boolean {
+  const parts = (svg.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return false;
+  if (typeof svg.getBBox !== "function") return false;
+  let box: DOMRect;
+  try {
+    box = svg.getBBox();
+  } catch {
+    return false; // not rendered (e.g. display: none) — nothing to measure
+  }
+  if (box.width <= 0 || box.height <= 0) return false;
+
+  const [vx, vy, vw, vh] = parts;
+  // Ignore sub-pixel float noise between Mermaid's numbers and ours.
+  const grow = (from: number, to: number, outward: 1 | -1) => ((to - from) * outward > 0.5 ? to : from);
+  const x0 = grow(vx, box.x - VIEWBOX_PADDING, -1);
+  const y0 = grow(vy, box.y - VIEWBOX_PADDING, -1);
+  const x1 = grow(vx + vw, box.x + box.width + VIEWBOX_PADDING, 1);
+  const y1 = grow(vy + vh, box.y + box.height + VIEWBOX_PADDING, 1);
+  if (x0 === vx && y0 === vy && x1 === vx + vw && y1 === vy + vh) return false;
+
+  svg.setAttribute("viewBox", `${x0} ${y0} ${x1 - x0} ${y1 - y0}`);
+  // With `useMaxWidth`, Mermaid caps the rendered width at the viewBox width; keep them in step.
+  if (svg.style.maxWidth) svg.style.maxWidth = `${x1 - x0}px`;
+  return true;
+}
+
 /**
  * Renders a Mermaid diagram from source. Lazy-loads mermaid, re-initializes
  * it with the current theme before every render (so it stays in sync when
  * the user toggles theme), and falls back to an inline error box with the
- * diagram source on failure without breaking the rest of the page.
+ * diagram source on failure without breaking the rest of the page. Once the
+ * SVG is in the page, `fitViewBox` widens its box to whatever was drawn.
  */
 export default function Mermaid({ code }: Props) {
   const { theme } = useTheme();
   const id = `mermaid-${sanitizeId(useId())}`;
   const [state, setState] = useState<State>({ status: "loading" });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +117,21 @@ export default function Mermaid({ code }: Props) {
     };
   }, [code, theme, id]);
 
+  const svgMarkup = state.status === "ok" ? state.svg : null;
+  useLayoutEffect(() => {
+    const svg = containerRef.current?.querySelector("svg");
+    if (!svgMarkup || !svg) return;
+    fitViewBox(svg);
+    // System fonts can still swap in after first paint; re-fit once they settle.
+    let active = true;
+    document.fonts?.ready.then(() => {
+      if (active && svg.isConnected) fitViewBox(svg);
+    });
+    return () => {
+      active = false;
+    };
+  }, [svgMarkup]);
+
   if (state.status === "error") {
     return (
       <div className="render-error mermaid-error">
@@ -85,7 +142,7 @@ export default function Mermaid({ code }: Props) {
   }
 
   if (state.status === "ok") {
-    return <div className="mermaid" dangerouslySetInnerHTML={{ __html: state.svg }} />;
+    return <div className="mermaid" ref={containerRef} dangerouslySetInnerHTML={{ __html: state.svg }} />;
   }
 
   return <div className="mermaid" aria-busy="true" />;
