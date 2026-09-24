@@ -4,7 +4,7 @@ description: A tour of TeachMe's own code, from Markdown folders to the quiz run
 duration: 60 min
 order: 1
 quiz: how-teachme-works-final
-syncedCommit: "f2742e0"
+syncedCommit: "379b5de"
 ---
 This course explains TeachMe using TeachMe. You will follow a `.teachme/` folder from disk
 to the screen: how the loader turns folders and frontmatter into a table of contents, how

@@ -671,15 +671,19 @@ button {
   border-bottom-color: var(--border-strong);
 }
 
+/* Block layout, not flex: a centered flex item that overflows spills past the
+   left edge where a scroll container can't reach it. */
 .mermaid {
-  display: flex;
-  justify-content: center;
   overflow-x: auto;
 }
 
 .mermaid svg {
+  display: block;
+  margin-inline: auto;
   max-width: 100%;
   height: auto;
+  /* An undersized viewBox should spill, not hide nodes (Mermaid.tsx fitViewBox). */
+  overflow: visible;
 }
 
 .render-error {

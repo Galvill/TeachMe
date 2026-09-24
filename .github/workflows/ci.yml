@@ -2,13 +2,15 @@ name: ci
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
   push:
     branches: [master]
 
 permissions:
   contents: read
 
+# Title and body edits are handled by pr-title.yml, not here. A skipped job
+# still posts a check run that counts as passing, and it would replace this
+# workflow's real result for that commit in the required checks.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -17,7 +19,6 @@ jobs:
   # The verification suite from .claude/agents/coder.md, on the engines floor
   # and on the current LTS.
   verify:
-    if: github.event.action != 'edited'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -42,7 +43,7 @@ jobs:
   # The packaged-product gate, only where /process-issues' Phase 7 needs it:
   # PRs into master. Unit PRs into integration/* get the suite above only.
   gate:
-    if: github.event_name == 'pull_request' && github.base_ref == 'master' && github.event.action != 'edited'
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,15 +54,3 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: .claude/scripts/integration-gate.sh
-
-  # Squash merges use the PR title as the commit subject, and release-please
-  # builds versions and the changelog from those subjects.
-  pr-title:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

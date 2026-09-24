@@ -48,20 +48,23 @@ which reads the whole `.teachme/` folder into one `Content` object with `errors`
 
 ## How the pieces connect
 
-The diagram shows the path from files on disk to the browser. The API handler in
-`server/api.js` is used in two places: by `startServer()` in production, and as Vite
-middleware in `vite.config.ts` during development.
+The diagram shows the path from files on disk to the browser. `loadContent()` in
+`server/content.js` reads the files, and `createHandler()` in `server/api.js` turns them into
+API responses. That handler is used in two places: by `startServer()` in `server/serve.js`
+in production, and by the `teachmeDevMiddleware()` Vite plugin in `vite.config.ts` during
+development. `buildStatus()` in `server/status.js` combines the loaded content with the
+git history.
 
 ```mermaid
 flowchart LR
-  files[".teachme/ Markdown"] --> load["content.js: loadContent()"]
-  load --> handler["api.js: createHandler()"]
-  handler --> serve["serve.js: startServer()"]
-  handler --> vite["vite.config.ts: teachmeDevMiddleware()"]
+  files[".teachme/ Markdown"] --> load["content.js"]
+  load --> handler["api.js"]
+  handler --> serve["serve.js"]
+  handler --> vite["vite.config.ts"]
   serve --> browser["React app (src/)"]
   vite --> browser
   load --> validate["teachme validate"]
-  load --> status["status.js: buildStatus()"]
+  load --> status["status.js"]
   git["git history"] --> status
 ```
 
