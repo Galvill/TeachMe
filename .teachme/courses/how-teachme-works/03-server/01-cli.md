@@ -10,8 +10,8 @@ decisions saves you from debugging the loader for what is really an argument pro
 
 ## Parsing arguments
 
-`main()` uses Node's built-in `parseArgs` with three options, `port`, `help` and `json`.
-`--no-open` is handled before that, by hand:
+`main()` uses Node's built-in `parseArgs` with four options, `port`, `help`, `json` and
+`version` (`-v` aliases `--version`). `--no-open` is handled before that, by hand:
 
 ```js
 const noOpen = argv.includes("--no-open");
