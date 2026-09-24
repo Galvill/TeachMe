@@ -25,7 +25,9 @@ problem, "the diagram doesn't render" is a browser problem.
 },
 ```
 
-That script dispatches on its first positional argument (`bin/teachme.js` → `main()`):
+`--version` (`-v`) and `--help` are answered first: `main()` prints the installed version or
+the usage text and returns. Otherwise the script dispatches on its first positional argument
+(`bin/teachme.js` → `main()`):
 
 ```js
 const [first, second] = positionals;

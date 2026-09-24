@@ -18,6 +18,10 @@ const noOpen = argv.includes("--no-open");
 const filteredArgv = argv.filter((arg) => arg !== "--no-open");
 ```
 
+`--version` is checked first, before `--help`: `readPackageVersion()` reads `version` from the
+`package.json` one level above `bin/`, so it prints the version of the installed package,
+not of the project you run it in.
+
 `--port` must be all digits and at most 65535, otherwise the CLI prints
 `Invalid --port: <value>. Must be an integer 0-65535.` and exits 1. `--port 0` is allowed;
 it asks the OS for any free port.

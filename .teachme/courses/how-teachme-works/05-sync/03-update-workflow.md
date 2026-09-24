@@ -38,6 +38,11 @@ The update workflow in `skill/teachme-authoring/SKILL.md`, for each item that is
 `never-synced` and `unknown-commit` items have no usable baseline, so every claim in them is
 checked against the current code before stamping.
 
+Its quality rules add: **code is ground truth, docs are hints.** When a README or comment
+disagrees with the code, the code wins, and `sources:` should list the implementing files,
+not the docs about them. Status only watches the listed paths, so a doc-only entry would not
+go stale when the behavior changes.
+
 The skill's rule is to stamp only what was reviewed: bumping `syncedCommit` without reading
 the diff would make the next `teachme status` report `ok` for content that is wrong.
 
