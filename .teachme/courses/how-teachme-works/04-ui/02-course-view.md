@@ -51,7 +51,9 @@ if (lang) return <CodeBlock code={code} lang={lang} />;
 - `Mermaid` lazy-imports `mermaid`, initializes it with `securityLevel: "strict"`, and
   renders. Initialization also pins `fontFamily` to the app's `--font-sans` stack and sets
   `htmlLabels: false`, so labels are drawn as plain SVG text instead of HTML in a
-  `foreignObject` — the same font and measurement path on every machine. On failure it shows
+  `foreignObject` — the same font and measurement path on every machine. Once the SVG is in
+  the page, `fitViewBox()` widens its `viewBox` if the drawing spills past the box Mermaid
+  measured, so edge nodes are never cut off. On failure it shows
   an error box with the message and the diagram source; only that block is affected.
 
 Image URLs go through `resolveContentUrl()`, which joins a relative `src` onto the page's
