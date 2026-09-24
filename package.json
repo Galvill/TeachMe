@@ -1,6 +1,6 @@
 {
   "name": "teachme",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local Markdown-based courses and quizzes: React+Vite app and a Node CLI.",
   "type": "module",
   "bin": {
