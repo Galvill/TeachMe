@@ -28,15 +28,18 @@ Use only these five. Write `flowchart`, never the older `graph` keyword.
 
 ### Avoid subgraphs and HTML labels
 
-- **No `subgraph`.** Grouping boxes are sized separately from the nodes inside them, so
-  when label measurement goes wrong the viewer sees empty grey containers with tiny,
-  unlabeled nodes instead of a readable diagram. Show grouping with node labels instead
-  (`toc1["TOC: Quizzes"]`) or split the diagram in two.
-- **No HTML in labels** (`<br/>`, `<b>`, `<i>` …). Any HTML forces Mermaid onto its
-  HTML-label (`foreignObject`) path, whose text is measured by the viewer's browser and
-  fonts rather than as plain SVG text, and is the least predictable across machines. Keep
-  labels to one short line; move detail into an edge label (`A -->|"quiz: slug"| B`) or
-  the prose around the diagram.
+TeachMe renders every diagram with `htmlLabels: false`, so labels are drawn as plain SVG
+`<text>`, not as HTML inside `<foreignObject>` (Mermaid's default). Write labels for
+that renderer:
+
+- **No `subgraph`.** No diagram in TeachMe's own content uses one, so they are untested
+  in this renderer. The one subgraph diagram that shipped showed up for one user as grey
+  container boxes holding tiny, unlabeled nodes. Show grouping with node labels instead
+  (`toc1["TOC: Quizzes"]`), or split the diagram in two.
+- **No HTML in labels** (`<br/>`, `<b>`, `<i>` …). With SVG-text labels, markup is not
+  rendered as HTML, so a label that relies on it will not look as written. Mermaid wraps
+  long labels by itself (at about 200px). Keep labels short, and move detail into an edge
+  label (`A -->|"quiz: slug"| B`) or into the prose around the diagram.
 
 ### flowchart
 
@@ -113,8 +116,9 @@ Every relationship needs a `: label`. Attributes are `type name`.
 3. Node ids are single words (`orderSvc`, `step_2`); put the display text in the label.
 4. In flowcharts, a node id starting with `o` or `x` right after `--` becomes an edge
    shape (`A--oB`). Put a space around the arrow: `A --> oB`.
-5. Inside a quoted label, write a double quote as `#quot;`. No line breaks: `<br/>` is
-   an HTML label (see "Avoid subgraphs and HTML labels").
+5. Inside a quoted label, write a double quote as `#quot;`. Don't force line
+   breaks with `<br/>`: labels are SVG text and Mermaid wraps them itself (see "Avoid
+   subgraphs and HTML labels").
 6. In `sequenceDiagram` message text, a `;` ends the statement: write `#59;` instead.
 7. The fence info string is exactly `mermaid` (lowercase), and the block is not empty.
 8. No `click` directives or scripts: `securityLevel: "strict"` blocks them.

@@ -33,12 +33,13 @@ describe("Mermaid", () => {
     expect(appFontFamily()).toBe("Inter, sans-serif");
   });
 
-  it("initializes mermaid with an explicit fontFamily before rendering", async () => {
+  it("initializes mermaid with an explicit fontFamily and SVG-text labels before rendering", async () => {
     const { container } = render(<Mermaid code={"flowchart LR\n  a --> b"} />);
     await waitFor(() => expect(container.querySelector(".mermaid svg")).not.toBeNull());
     expect(mermaidInitialize).toHaveBeenCalledWith(
       expect.objectContaining({
         securityLevel: "strict",
+        htmlLabels: false,
         fontFamily: FALLBACK_FONT_FAMILY,
         themeVariables: expect.objectContaining({ fontFamily: FALLBACK_FONT_FAMILY }),
       }),

@@ -50,6 +50,11 @@ export default function Mermaid({ code }: Props) {
           // Mermaid's default stack resolves differently per OS (issue #3).
           fontFamily,
           themeVariables: { fontFamily },
+          // Draw labels as plain SVG <text> instead of HTML inside <foreignObject>
+          // (Mermaid's default). foreignObject labels are sized by the browser's
+          // CSS layout in a detached element, which is the least predictable
+          // measurement path across machines (issue #3).
+          htmlLabels: false,
         });
         try {
           const { svg } = await mermaid.render(id, code);
