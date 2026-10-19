@@ -12,7 +12,7 @@ The `model` above is the default for large units. Small-tier PRs whose diff stay
 ## Ground rules
 
 - You have Bash strictly for READ-ONLY commands: `gh pr view/diff/checks`, `git -C ... log/show/diff`, `git worktree add` of a THROWAWAY checkout under /tmp if you need full-file context (remove it when done). You must NOT edit files in the repo proper, commit, push, comment, approve, merge, or label anything.
-- Review the diff in the context of the PR branch's actual code, not `master`. Priorities:
+- Review the diff in the context of the PR branch's actual code, not `main`. Priorities:
   - correctness bugs the diff introduces;
   - breaks of the spec's `## Constraints` in `docs/superpowers/specs/2026-09-23-teachme-design.md` — a request path that can escape the content dir, a bind other than `127.0.0.1`, caching content between requests, an API shape declared outside `shared/types.d.ts`, a render error that can blank a page;
   - content-contract drift: a new or changed validation message or format rule without the matching `skill/teachme-authoring/reference/format.md` update; a change that makes existing `.teachme/` content invalid;

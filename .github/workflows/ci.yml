@@ -3,7 +3,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -41,9 +41,9 @@ jobs:
       - run: node bin/teachme.js validate skill/teachme-authoring/examples/.teachme
 
   # The packaged-product gate, only where /process-issues' Phase 7 needs it:
-  # PRs into master. Unit PRs into integration/* get the suite above only.
+  # PRs into main. Unit PRs into integration/* get the suite above only.
   gate:
-    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -87,10 +87,10 @@ npm run build                          # build the UI into dist/
 
 CI (`.github/workflows/ci.yml`) runs the tests, typecheck, build and content validation on
 every PR, and the packaged-product gate (`.claude/scripts/integration-gate.sh`) on PRs into
-`master`. PR titles must be [Conventional Commits](https://www.conventionalcommits.org/):
-PRs into `master` are merged with a merge commit (branch protection allows only that merge
+`main`. PR titles must be [Conventional Commits](https://www.conventionalcommits.org/):
+PRs into `main` are merged with a merge commit (branch protection allows only that merge
 method), and [release-please](https://github.com/googleapis/release-please) turns the
-`feat:`/`fix:` subjects reachable on `master` into a release PR that bumps the version and
+`feat:`/`fix:` subjects reachable on `main` into a release PR that bumps the version and
 writes `CHANGELOG.md`. Merging that PR tags the release. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contributor workflow.
 

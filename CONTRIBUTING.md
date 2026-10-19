@@ -1,7 +1,7 @@
 # Contributing to TeachMe
 
 Thanks for looking at TeachMe. This document describes how a change actually gets from your
-machine to `master`: how to verify it locally, how CI and branch protection check it, and how
+machine to `main`: how to verify it locally, how CI and branch protection check it, and how
 it gets merged.
 
 ## Setup
@@ -51,7 +51,7 @@ the `pr-title` check (`.github/workflows/pr-title.yml`, via
 on every PR, and re-checked on every title or body edit.
 
 The subject matters beyond style: [release-please](https://github.com/googleapis/release-please)
-(`release-please-config.json`) reads every conventional-commit subject that lands on `master`
+(`release-please-config.json`) reads every conventional-commit subject that lands on `main`
 to compute the next version and write the changelog. `feat` and `fix` commits produce a
 visible changelog entry and a version bump; `chore`, `refactor`, `test`, `build`, `ci` and
 `style` are accepted but hidden from the changelog (see `changelog-sections` in
@@ -61,21 +61,21 @@ release PR to update them.
 
 ## Checks and review required to merge
 
-`master` is protected by a ruleset that requires, on a branch that is up to date with
-`master`:
+`main` is protected by a ruleset that requires, on a branch that is up to date with
+`main`:
 
 - `verify (20)` and `verify (lts/*)` — the check above, run on Node 20 and the current LTS.
 - `gate` — `.claude/scripts/integration-gate.sh`, an end-to-end check that installs the
   packed tarball into a clean prefix and exercises the CLI and a live server over HTTP. It
-  only runs on PRs whose base is `master`.
+  only runs on PRs whose base is `main`.
 - `pr-title` — the Conventional Commit title check above.
 - One approving review. Pushing new commits dismisses a prior approval.
 
-Merges into `master` use a **merge commit**, not squash or rebase — the branch ruleset only
+Merges into `main` use a **merge commit**, not squash or rebase — the branch ruleset only
 allows the "merge" method. (You may also see PRs merge into short-lived `integration/*`
 branches with squash instead; those are internal to this repo's own issue-batching workflow
 and are not part of the path a regular contributor needs to follow — just open your PR
-against `master`.)
+against `main`.)
 
 ## License
 
