@@ -5,7 +5,7 @@ TeachMe helps engineers understand the codebase they work on. Coding agents writ
 the code. The `teachme` CLI serves them in a local React app, keeps your progress, and reports
 which lessons went stale after later commits.
 
-Everything runs locally: no accounts, no database, the server binds to `127.0.0.1` only.
+Everything runs locally: no accounts, no database, the server binds to `127.0.0.1` by default.
 
 ## Requirements
 
@@ -28,6 +28,7 @@ Run from the root of the repo you want to study. `[dir]` defaults to `./.teachme
 
 ```bash
 teachme [dir]                  # serve the UI at http://127.0.0.1:4321 and open the browser
+  --host <addr>                #   address to listen on (default 127.0.0.1; 0.0.0.0 = all interfaces, no auth!)
   --port <n>                   #   port to listen on (default 4321; tries the next ports if busy, 0 = any free port)
   --no-open                    #   don't open the browser
 teachme validate [dir]         # print content errors/warnings; exit 1 on errors

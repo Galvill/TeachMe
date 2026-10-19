@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import path from "node:path";
 import { createHandler } from "./api.js";
 import { createProgressStore } from "./progress.js";
@@ -10,7 +11,7 @@ import { createProgressStore } from "./progress.js";
 
 const DEFAULT_PORT = 4321;
 const MAX_PORT_ATTEMPTS = 20;
-const HOST = "127.0.0.1";
+export const DEFAULT_HOST = "127.0.0.1";
 const NOT_BUILT_MESSAGE = 'TeachMe UI is not built. Run "npm run build".';
 
 /** @type {Record<string, string>} */
@@ -40,6 +41,35 @@ export function formatIssues(content) {
   for (const issue of content.warnings) lines.push(`WARN ${issue.file}: ${issue.message}`);
   lines.push(`${content.errors.length} errors, ${content.warnings.length} warnings`);
   return lines.join("\n");
+}
+
+/**
+ * True if `host` only accepts connections from this machine: `localhost`, any
+ * `127.0.0.0/8` address, `::1`, or an IPv4-mapped loopback (`::ffff:127.x.x.x`).
+ * @param {string} host
+ * @returns {boolean}
+ */
+export function isLoopbackHost(host) {
+  const h = host.toLowerCase();
+  if (h === "localhost" || h === "::1") return true;
+  const v4 = h.startsWith("::ffff:") ? h.slice("::ffff:".length) : h;
+  return net.isIPv4(v4) && v4.startsWith("127.");
+}
+
+/**
+ * The URL a browser should use to reach a server bound to `host:port`.
+ * Wildcard binds (`0.0.0.0`, `::`) point at the matching loopback address,
+ * and IPv6 literals are bracketed.
+ * @param {string} host
+ * @param {number} port
+ * @returns {string}
+ */
+export function serverUrl(host, port) {
+  let urlHost = host;
+  if (host === "0.0.0.0") urlHost = "127.0.0.1";
+  else if (host === "::") urlHost = "::1";
+  if (net.isIPv6(urlHost)) urlHost = `[${urlHost}]`;
+  return `http://${urlHost}:${port}`;
 }
 
 /**
@@ -153,12 +183,13 @@ function createStaticHandler(distDir) {
 }
 
 /**
- * Listen on `port` (0 = OS-assigned), resolving once bound.
+ * Listen on `host:port` (port 0 = OS-assigned), resolving once bound.
  * @param {http.Server} server
+ * @param {string} host
  * @param {number} port
  * @returns {Promise<void>}
  */
-function listenOnce(server, port) {
+function listenOnce(server, host, port) {
   return new Promise((resolve, reject) => {
     function onError(/** @type {NodeJS.ErrnoException} */ err) {
       cleanup();
@@ -174,22 +205,23 @@ function listenOnce(server, port) {
     }
     server.once("error", onError);
     server.once("listening", onListening);
-    server.listen(port, HOST);
+    server.listen(port, host);
   });
 }
 
 /**
- * Bind `server` to `127.0.0.1`. `port === 0` asks the OS for a free port (no
+ * Bind `server` to `host`. `port === 0` asks the OS for a free port (no
  * retry). Otherwise starts at `port` (default `4321`) and, on `EADDRINUSE`,
  * retries the next port up to `MAX_PORT_ATTEMPTS` times total before
  * rejecting with the last error.
  * @param {http.Server} server
+ * @param {string} host
  * @param {number} [port]
  * @returns {Promise<number>}
  */
-async function listenWithRetry(server, port) {
+async function listenWithRetry(server, host, port) {
   if (port === 0) {
-    await listenOnce(server, 0);
+    await listenOnce(server, host, 0);
     return /** @type {import('node:net').AddressInfo} */ (server.address()).port;
   }
 
@@ -199,7 +231,7 @@ async function listenWithRetry(server, port) {
   for (let attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt += 1) {
     const candidate = startPort + attempt;
     try {
-      await listenOnce(server, candidate);
+      await listenOnce(server, host, candidate);
       return candidate;
     } catch (err) {
       const errno = /** @type {NodeJS.ErrnoException} */ (err);
@@ -213,8 +245,10 @@ async function listenWithRetry(server, port) {
 /**
  * Start the TeachMe HTTP server: the API/content handler from `server/api.js`
  * composed with a static-file server (falling back to `distDir/index.html`
- * for unknown paths) for everything else. Binds to `127.0.0.1` only.
- * @param {{ contentDir: string; repoRoot: string; port?: number; distDir: string }} opts
+ * for unknown paths) for everything else. Binds to `opts.host` (default
+ * `127.0.0.1`); the returned `url` is what a browser should open (see
+ * `serverUrl`).
+ * @param {{ contentDir: string; repoRoot: string; host?: string; port?: number; distDir: string }} opts
  * @returns {Promise<{ url: string; close(): Promise<void> }>}
  */
 export async function startServer(opts) {
@@ -229,7 +263,8 @@ export async function startServer(opts) {
     apiHandler(req, res, () => staticHandler(req, res));
   });
 
-  const port = await listenWithRetry(server, opts.port);
+  const host = opts.host ?? DEFAULT_HOST;
+  const port = await listenWithRetry(server, host, opts.port);
 
   // Persistent listener: after startup, a server-level error (e.g. EMFILE
   // during accept) must not crash the process, per spec §8 ("Nothing blocks
@@ -240,7 +275,7 @@ export async function startServer(opts) {
   });
 
   return {
-    url: `http://${HOST}:${port}`,
+    url: serverUrl(host, port),
     close() {
       return new Promise((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));

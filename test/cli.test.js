@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { makeRepo } from "./gitRepo.js";
 import { writeTree } from "./helpers.js";
-import { startServer } from "../server/serve.js";
+import { isLoopbackHost, serverUrl, startServer } from "../server/serve.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const binPath = path.join(repoRoot, "bin", "teachme.js");
@@ -164,6 +164,62 @@ describe("teachme serve", () => {
     }
   });
 
+  /**
+   * Spawn `teachme <example> --no-open --port 0 ...extra` and resolve once it
+   * prints its URL.
+   * @param {string[]} extra
+   * @returns {Promise<{ url: string; stderr: () => string }>}
+   */
+  function spawnServe(extra) {
+    const child = spawn(
+      process.execPath,
+      [binPath, exampleContentDir, "--no-open", "--port", "0", ...extra],
+      { cwd: repoRoot, env: { ...process.env, TEACHME_HOME: tmpHome() } },
+    );
+    children.push(child);
+    let err = "";
+    child.stderr.on("data", (d) => (err += d));
+    return new Promise((resolve, reject) => {
+      let buf = "";
+      const onData = (/** @type {Buffer} */ d) => {
+        buf += d.toString();
+        const m = buf.match(/TeachMe is running at (\S+)/);
+        if (m) {
+          child.stdout.off("data", onData);
+          // Give the post-URL warning a moment to land on stderr.
+          setTimeout(() => resolve({ url: m[1], stderr: () => err }), 50);
+        }
+      };
+      child.stdout.on("data", onData);
+      child.on("error", reject);
+      child.on("close", (code) => reject(new Error(`teachme exited early with code ${code}: ${err}`)));
+    });
+  }
+
+  it("defaults to 127.0.0.1 without a warning", async () => {
+    const { url, stderr } = await spawnServe([]);
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(stderr()).not.toMatch(/Warning: listening/);
+  });
+
+  it("--host localhost binds there without a warning", async () => {
+    const { url, stderr } = await spawnServe(["--host", "localhost"]);
+    expect(url).toMatch(/^http:\/\/localhost:\d+$/);
+    expect(stderr()).not.toMatch(/Warning: listening/);
+    const res = await fetch(`${url}/api/catalog`);
+    expect(res.status).toBe(200);
+  });
+
+  it("--host 0.0.0.0 prints a loopback URL and a no-auth warning", async () => {
+    const { url, stderr } = await spawnServe(["--host", "0.0.0.0"]);
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(stderr()).toContain(
+      "Warning: listening on 0.0.0.0, which is reachable from other machines. TeachMe has no authentication.\n",
+    );
+    const res = await fetch(`${url}/api/catalog`);
+    expect(res.status).toBe(200);
+  });
+
   it("serve answers catalog", async () => {
     const child = spawn(
       process.execPath,
@@ -194,6 +250,42 @@ describe("teachme serve", () => {
     expect(body.courses.some((/** @type {{ slug: string }} */ c) => c.slug === "teachme-basics")).toBe(
       true,
     );
+  });
+});
+
+describe("teachme --host validation", () => {
+  it("--help lists --host", async () => {
+    const { code, stdout } = await run(["--help"]);
+    expect(stdout).toMatch(/--host <addr>/);
+    expect(code).toBe(0);
+  });
+
+  it.each(["not a host", "999.1.1.1", "bad-", "[::1]"])("rejects --host %j", async (host) => {
+    const { code, stdout, stderr } = await run([exampleContentDir, "--no-open", "--host", host]);
+    expect(stderr).toBe(`Invalid --host: ${host}. Must be an IPv4/IPv6 address or a hostname.\n`);
+    expect(stdout).toBe("");
+    expect(code).toBe(1);
+  });
+});
+
+describe("serverUrl / isLoopbackHost", () => {
+  it("builds browser URLs", () => {
+    expect(serverUrl("127.0.0.1", 4321)).toBe("http://127.0.0.1:4321");
+    expect(serverUrl("localhost", 80)).toBe("http://localhost:80");
+    expect(serverUrl("0.0.0.0", 1)).toBe("http://127.0.0.1:1");
+    expect(serverUrl("::", 1)).toBe("http://[::1]:1");
+    expect(serverUrl("::1", 1)).toBe("http://[::1]:1");
+    expect(serverUrl("fe80::1", 1)).toBe("http://[fe80::1]:1");
+    expect(serverUrl("192.168.1.5", 1)).toBe("http://192.168.1.5:1");
+  });
+
+  it("recognises loopback hosts", () => {
+    for (const h of ["127.0.0.1", "127.1.2.3", "localhost", "LOCALHOST", "::1", "::ffff:127.0.0.1"]) {
+      expect(isLoopbackHost(h)).toBe(true);
+    }
+    for (const h of ["0.0.0.0", "::", "192.168.1.5", "example.com", "fe80::1"]) {
+      expect(isLoopbackHost(h)).toBe(false);
+    }
   });
 });
 
@@ -284,6 +376,30 @@ describe("startServer", () => {
       expect(res.status).toBe(200);
     } finally {
       stderrSpy.mockRestore();
+      await close();
+    }
+  });
+
+  it("binds to an explicit host and returns a browser URL for it", async () => {
+    const distDir = writeTree({});
+    const createServerSpy = vi.spyOn(http, "createServer");
+    const { url, close } = await startServer({
+      contentDir: exampleContentDir,
+      repoRoot,
+      distDir,
+      host: "0.0.0.0",
+      port: 0,
+    });
+    const server = createServerSpy.mock.results[0].value;
+    createServerSpy.mockRestore();
+
+    try {
+      const addr = server.address();
+      expect(addr.address).toBe("0.0.0.0");
+      expect(url).toBe(`http://127.0.0.1:${addr.port}`);
+      const res = await fetch(`${url}/api/catalog`);
+      expect(res.status).toBe(200);
+    } finally {
       await close();
     }
   });
