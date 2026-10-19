@@ -81,12 +81,15 @@ elsewhere is rejected too.
 `startServer()` in `server/serve.js` wraps this handler in a `node:http` server and passes
 a static-file handler for `dist/` as `next`. Unknown paths fall back to `dist/index.html`
 so the React router can handle deep links such as `/courses/x/y`. It binds to
-`HOST = "127.0.0.1"` only, starting at port 4321 and trying up to `MAX_PORT_ATTEMPTS` (20)
-ports on `EADDRINUSE`.
+`DEFAULT_HOST = "127.0.0.1"` unless the CLI passes another `host` (`teachme --host <addr>`),
+starting at port 4321 and trying up to `MAX_PORT_ATTEMPTS` (20) ports on `EADDRINUSE`. The returned URL comes from `serverUrl()`: a wildcard bind (`0.0.0.0`,
+`::`) points the browser at loopback, and IPv6 literals get brackets. A non-loopback host makes
+the CLI print a warning, because the server has no authentication.
 
 ## Key takeaways
 
 - Every content request (catalog, course, page, quiz) reloads content from disk.
 - Page paths are own-key map lookups; only `/content/*` reads files by path, with two containment
   checks.
-- The server listens on `127.0.0.1` and falls back to `index.html` for client routes.
+- The server listens on `127.0.0.1` by default (`--host` changes it) and falls back to
+  `index.html` for client routes.

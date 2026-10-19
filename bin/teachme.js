@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import open from "open";
 import { loadContent } from "../server/content.js";
 import { hasCommits, isGitRepo, resolveRepoRoot } from "../server/git.js";
-import { formatIssues, startServer } from "../server/serve.js";
+import { DEFAULT_HOST, formatIssues, isLoopbackHost, startServer } from "../server/serve.js";
 import { buildStatus, formatStatus } from "../server/status.js";
 
 const HELP = `Usage:
   teachme [dir]            Serve content (dir defaults to ./.teachme)
+    --host <addr>           Address to listen on (default 127.0.0.1; 0.0.0.0 = all interfaces)
     --port <n>              Port to listen on (default 4321)
     --no-open               Don't open the browser
   teachme validate [dir]   Validate content and print errors/warnings
@@ -106,7 +108,7 @@ function runStatus(dir, options) {
 /**
  * `teachme [dir]`.
  * @param {string | undefined} dir
- * @param {{ port: number | undefined; open: boolean }} options
+ * @param {{ host: string; port: number | undefined; open: boolean }} options
  * @returns {Promise<void>}
  */
 async function runServe(dir, options) {
@@ -126,14 +128,33 @@ async function runServe(dir, options) {
     );
   }
 
-  const { url, close } = await startServer({
-    contentDir: absDir,
-    repoRoot,
-    port: options.port,
-    distDir,
-  });
+  /** @type {Awaited<ReturnType<typeof startServer>>} */
+  let server;
+  try {
+    server = await startServer({
+      contentDir: absDir,
+      repoRoot,
+      host: options.host,
+      port: options.port,
+      distDir,
+    });
+  } catch (err) {
+    const code = /** @type {NodeJS.ErrnoException} */ (err).code;
+    if (code === "ENOTFOUND" || code === "EADDRNOTAVAIL" || code === "EAI_AGAIN") {
+      process.stderr.write(`Cannot listen on --host ${options.host}: ${code}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    throw err;
+  }
+  const { url, close } = server;
 
   console.log(`TeachMe is running at ${url}`);
+  if (!isLoopbackHost(options.host)) {
+    process.stderr.write(
+      `Warning: listening on ${options.host}, which is reachable from other machines. TeachMe has no authentication.\n`,
+    );
+  }
 
   const content = loadContent(absDir, { repoRoot });
   if (content.errors.length > 0 || content.warnings.length > 0) {
@@ -161,6 +182,18 @@ async function runServe(dir, options) {
 }
 
 /**
+ * True if `value` is an IP literal (unbracketed) or an RFC 1123 hostname.
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isValidHost(value) {
+  if (net.isIP(value) !== 0) return true;
+  if (/^[\d.]+$/.test(value)) return false; // looks like IPv4 but isn't one
+  const label = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
+  return value.length <= 253 && new RegExp(`^${label}(?:\\.${label})*$`).test(value);
+}
+
+/**
  * @param {string[]} argv
  * @returns {Promise<void>}
  */
@@ -168,12 +201,13 @@ async function main(argv) {
   const noOpen = argv.includes("--no-open");
   const filteredArgv = argv.filter((arg) => arg !== "--no-open");
 
-  /** @type {{ values: { port?: string; help?: boolean; json?: boolean; version?: boolean }; positionals: string[] }} */
+  /** @type {{ values: { host?: string; port?: string; help?: boolean; json?: boolean; version?: boolean }; positionals: string[] }} */
   let parsed;
   try {
     parsed = parseArgs({
       args: filteredArgv,
       options: {
+        host: { type: "string" },
         port: { type: "string" },
         help: { type: "boolean" },
         json: { type: "boolean" },
@@ -209,6 +243,18 @@ async function main(argv) {
     port = Number(values.port);
   }
 
+  let host = DEFAULT_HOST;
+  if (values.host !== undefined) {
+    if (!isValidHost(values.host)) {
+      process.stderr.write(
+        `Invalid --host: ${values.host}. Must be an IPv4/IPv6 address or a hostname.\n`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    host = values.host;
+  }
+
   const [first, second] = positionals;
   if (first === "validate") {
     runValidate(second);
@@ -219,7 +265,7 @@ async function main(argv) {
     return;
   }
 
-  await runServe(first, { port, open: !noOpen });
+  await runServe(first, { host, port, open: !noOpen });
 }
 
 main(process.argv.slice(2)).catch((err) => {

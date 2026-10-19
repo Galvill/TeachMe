@@ -32,7 +32,7 @@ multi-user / hosted deployment, inline quiz blocks inside lesson pages.
 - Distributed as a CLI (`teachme`), installed via `npm i -g` / `npm link` from this repo; Node >= 20.
 - Server code is plain ESM JavaScript on `node:http`, typed with JSDoc against `shared/types.d.ts`; frontend is TypeScript.
 - API response shapes are declared once in `shared/types.d.ts` and imported by both server and UI.
-- Server binds to `127.0.0.1` only; every path from a request is resolved and must stay inside the content dir.
+- Server binds to `127.0.0.1` by default (`--host` is an explicit opt-in to another address); every path from a request is resolved and must stay inside the content dir.
 - Mermaid diagrams in Markdown must render; a broken diagram never breaks the page.
 - Quiz answers are shipped to the browser: learning tool, not an exam.
 - Content is re-read from disk on every request: no cache, no watcher.
@@ -189,7 +189,8 @@ teachme status [dir]     # git-based staleness report (see §6)
 
 - **Repo root** = `git rev-parse --show-toplevel` from the content dir; if not a git repo,
   the content dir's parent. Used for resolving `sources:` and editor links.
-- Server binds to `127.0.0.1` only.
+- Server binds to `127.0.0.1` by default; `teachme --host <addr>` binds elsewhere and warns that
+  the server has no authentication.
 
 ## 4. Architecture
 
