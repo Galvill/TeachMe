@@ -40,7 +40,7 @@ if (first === "status") {
   return;
 }
 
-await runServe(first, { port, open: !noOpen });
+await runServe(first, { host, port, open: !noOpen });
 ```
 
 All three commands start the same way: they call `loadContent()` from `server/content.js`,
