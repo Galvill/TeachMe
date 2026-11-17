@@ -1,0 +1,38 @@
+{
+  "design": [1920, 1080],
+  "fps": 30,
+  "height": 720,
+  "scene": {
+    "duration": 4.4,
+    "id": "intro",
+    "layout": {"row": ["browser", "resolver", "root"]},
+    "nodes": {
+      "browser": {"at": null, "hidden": false, "label": "Browser", "size": null, "sub": "own + OS cache"},
+      "resolver": {"at": null, "hidden": false, "label": "Resolver", "size": [260, 160], "sub": "ISP / 8.8.8.8"},
+      "root": {"at": null, "hidden": false, "label": "Root server", "size": null, "sub": null}
+    },
+    "steps": [
+      {
+        "action": "send",
+        "caption": "1  Browser and OS caches miss",
+        "duration": 1.2,
+        "index": 0,
+        "send": {"from": "browser", "kind": "request", "label": "example.com ?", "to": "resolver"},
+        "start": 0.6
+      },
+      {
+        "action": "send",
+        "caption": null,
+        "duration": 1.0,
+        "index": 1,
+        "send": {"from": "resolver", "kind": "request", "label": "who has .com?", "to": "root"},
+        "start": 1.9
+      }
+    ]
+  },
+  "seed": 7,
+  "style": "sketch-dark",
+  "title": "How a DNS lookup works",
+  "version": 1,
+  "width": 1280
+}

@@ -1,0 +1,31 @@
+{
+  "design": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "height": 1080,
+  "width": 1920,
+  "seed": 7,
+  "style": "sketch-dark",
+  "title": "Lint fixture",
+  "version": 1,
+  "scene": {
+    "id": "overflow",
+    "duration": 2,
+    "layout": null,
+    "nodes": {
+      "resolver": {
+        "at": [
+          960,
+          470
+        ],
+        "hidden": false,
+        "label": "Recursive resolver service",
+        "size": null,
+        "sub": null
+      }
+    },
+    "steps": []
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "design": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "height": 1080,
+  "width": 1920,
+  "seed": 7,
+  "style": "sketch-dark",
+  "title": "Lint fixture",
+  "version": 1,
+  "scene": {
+    "id": "clean",
+    "duration": 6,
+    "layout": null,
+    "nodes": {
+      "browser": {
+        "at": [
+          400,
+          470
+        ],
+        "hidden": false,
+        "label": "Browser",
+        "size": null,
+        "sub": "own + OS cache"
+      },
+      "resolver": {
+        "at": [
+          1000,
+          470
+        ],
+        "hidden": false,
+        "label": "Resolver",
+        "size": [
+          260,
+          160
+        ],
+        "sub": "ISP / 8.8.8.8"
+      },
+      "root": {
+        "at": [
+          1560,
+          470
+        ],
+        "hidden": false,
+        "label": "Root server",
+        "size": null,
+        "sub": null
+      }
+    },
+    "steps": [
+      {
+        "action": "send",
+        "caption": "1  Ask the resolver",
+        "duration": 1,
+        "index": 0,
+        "send": {
+          "from": "browser",
+          "kind": "request",
+          "label": "example.com ?",
+          "to": "resolver"
+        },
+        "start": 0.5
+      },
+      {
+        "action": "send",
+        "caption": null,
+        "duration": 1,
+        "index": 1,
+        "send": {
+          "from": "resolver",
+          "kind": "reply",
+          "label": "not cached",
+          "to": "browser"
+        },
+        "start": 1.8
+      },
+      {
+        "action": "send",
+        "caption": "2  Ask the root",
+        "duration": 1,
+        "index": 2,
+        "send": {
+          "from": "resolver",
+          "kind": "request",
+          "label": "who has .com?",
+          "to": "root"
+        },
+        "start": 3
+      },
+      {
+        "action": "send",
+        "caption": null,
+        "duration": 1,
+        "index": 3,
+        "send": {
+          "from": "root",
+          "kind": "reply",
+          "label": "ask .com",
+          "to": "resolver"
+        },
+        "start": 4.2
+      }
+    ]
+  }
+}
