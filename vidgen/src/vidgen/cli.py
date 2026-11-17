@@ -93,13 +93,26 @@ def _config(script: Path, explicit: Path | None, draft: bool = False) -> Config:
 @app.command()
 def validate(
     script: Annotated[Path, typer.Argument(help="The script.yaml to check.")],
+    strict: Annotated[bool, typer.Option("--strict", help="Treat warnings (an out-of-date manifest) as failures.")] = False,
 ) -> None:
-    """Check a script's schema, references and cues (no endpoints needed)."""
+    """Check a script's schema, references and cues (no endpoints needed), and its manifest."""
+    from vidgen.manifest import ManifestError, is_stale, manifest_path, read_manifest
+
     try:
         s = load_script(script)
     except ScriptError as e:
         for issue in e.issues:
             typer.echo(str(issue))
+        raise typer.Exit(1)
+    try:
+        m = read_manifest(manifest_path(script))
+    except ManifestError as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    warned = m is not None and is_stale(m, s)
+    if warned:
+        typer.echo("warn: manifest is out of date (script changed since publish)")
+    if warned and strict:
         raise typer.Exit(1)
     typer.echo(f"ok: {len(s.scenes)} scenes")
 
@@ -193,3 +206,72 @@ def lint(script: ScriptArg, config: ConfigOpt = None) -> None:
     p = _prepare(script, cfg)
     lint_all(cfg, p.scenes)
     typer.echo(f"ok: {len(p.scenes)} scenes, no lint issues")
+
+
+@app.command()
+@_guarded
+def publish(
+    script: ScriptArg,
+    target: Annotated[
+        Optional[str], typer.Option("--target", help="A [publish.targets] name (default: publish.default).")
+    ] = None,
+    build_dir: Annotated[
+        Optional[Path], typer.Option("--build-dir", help="Build dir (default: <cache>/builds/<slug>).")
+    ] = None,
+    config: ConfigOpt = None,
+) -> None:
+    """Upload the finished build to a target and write the manifest next to the script."""
+    from boto3.exceptions import Boto3Error
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    from vidgen.manifest import manifest_path, write_manifest
+    from vidgen.publish import PublishError
+    from vidgen.publish import publish as run_publish
+
+    try:
+        m = run_publish(script, _config(script, config), target=target, build_dir=build_dir)
+    except PublishError as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    except ClientError as e:
+        err = e.response.get("Error", {})
+        typer.echo(f"s3: {err.get('Code', 'ClientError')}: {err.get('Message') or e}")
+        raise typer.Exit(2)
+    except (BotoCoreError, Boto3Error) as e:  # NoCredentialsError, EndpointConnectionError, ...
+        typer.echo(f"s3: {type(e).__name__.removesuffix('Error')}: {e}")
+        raise typer.Exit(2)
+    write_manifest(manifest_path(script), m)
+    typer.echo(f"published {m.slug} → {m.files.video.url or m.files.video.location}")
+
+
+@app.command()
+def bakeoff(
+    endpoints: Annotated[
+        Optional[str], typer.Option("--endpoints", help="Comma-separated [tts.endpoints] names (default: bakeoff.endpoints).")
+    ] = None,
+    out: Annotated[Optional[Path], typer.Option("--out", help="Clip dir (default: vidgen/bakeoff/clips/).")] = None,
+    passage: Annotated[Optional[Path], typer.Option("--passage", help="Passage file (default: vidgen/bakeoff/passage.md).")] = None,
+    results: Annotated[Optional[Path], typer.Option("--results", help="Results file (default: vidgen/bakeoff/results.md).")] = None,
+    config: ConfigOpt = None,
+) -> None:
+    """Synthesize the bake-off passage on each endpoint and write clips and results.md."""
+    from vidgen import bakeoff as b
+
+    try:
+        cfg = load_config(None, config)
+        names = [n.strip() for n in endpoints.split(",") if n.strip()] if endpoints else list(cfg.bakeoff.endpoints)
+        if not names:
+            raise ConfigError("no bake-off endpoints; set bakeoff.endpoints or pass --endpoints")
+        rows = b.run_bakeoff(cfg, passage or b.DEFAULT_PASSAGE, names, out or b.DEFAULT_CLIPS)
+    except (ConfigError, b.PassageError, OSError) as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    dest = results or b.DEFAULT_RESULTS
+    b.write_results(rows, dest)
+    for r in rows:
+        if r.error:
+            typer.echo(f"{r.endpoint}: error: {r.error}")
+        else:
+            rtf = "n/a" if r.rtf is None else f"{r.rtf:.3f}"
+            typer.echo(f"{r.endpoint}: rtf {rtf}, cue words aligned {r.cue_aligned}")
+    typer.echo(str(dest))
