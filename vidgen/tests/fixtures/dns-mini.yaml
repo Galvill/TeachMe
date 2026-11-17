@@ -1,0 +1,53 @@
+# A small valid script: two scenes, the second inheriting the first's diagram.
+title: How a DNS lookup works
+slug: dns-mini
+voice: default
+language: en
+style: sketch-dark
+seed: 7
+syncedCommit: "3f2a9c1"
+sources: [src/resolver.ts]
+pronunciations: {DNS: "D N S", TTL: "T T L"}
+scenes:
+  - id: intro
+    narration: >-
+      Before your browser can load a website, the name has to become an IP address.
+      First the browser asks the {r}recursive resolver.
+    diagram:
+      layout: {row: [browser, resolver]}
+      nodes:
+        browser: {label: Browser, sub: "own + OS cache", at: [170, 345]}
+        resolver: {label: Recursive resolver, sub: "ISP / 8.8.8.8"}
+        root: {label: Root server, at: [1060, 150], hidden: true}
+    steps:
+      - at: "@cue:browser"
+        highlight: browser
+      - at: "@cue:r+0.2"
+        send: {from: browser, to: resolver, label: "example.com ?", kind: request}
+        caption: "1  Browser and OS caches miss"
+      - at: "+0.3"
+        show: [root]
+  - id: ask-root
+    narration: "The resolver asks a root server, which points it to the .com servers."
+    diagram:
+      inherit: true
+      nodes:
+        tld: {label: .com TLD, at: [1500, 345]}
+    steps:
+      - at: "@cue:asks"
+        send: {from: resolver, to: root, label: "example.com ?"}
+      - at: "@cue:points"
+        send: {from: root, to: resolver, label: "ask .com", kind: reply}
+      - at: "+0.2"
+        badge: {text: "go to .com", near: resolver}
+      - at: "@cue:servers"
+        code:
+          id: dig
+          lang: shell
+          text: |
+            $ dig +trace example.com
+            .   518400  IN  NS  a.root-servers.net.
+          at: [960, 800]
+          size: [700, 160]
+          typing: true
+          highlight_lines: [2]

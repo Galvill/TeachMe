@@ -1,0 +1,19 @@
+# A send to a node that doesn't exist after inheritance ("resolver" is inherited, "resolvr" isn't).
+title: Unknown node
+scenes:
+  - id: intro
+    narration: "The browser asks the resolver."
+    diagram:
+      nodes:
+        browser: {label: Browser, at: [200, 400]}
+        resolver: {label: Resolver, at: [800, 400]}
+    steps:
+      - at: "@cue:asks"
+        send: {from: browser, to: resolver}
+  - id: again
+    narration: "Then it asks again."
+    diagram:
+      inherit: true
+    steps:
+      - at: "@cue:again"
+        send: {from: browser, to: resolvr}

@@ -1,0 +1,11 @@
+# A cue word missing from the narration.
+title: Missing cue
+scenes:
+  - id: intro
+    narration: "The browser asks the resolver."
+    diagram:
+      nodes:
+        a: {label: A, at: [200, 400]}
+    steps:
+      - at: "@cue:resolvr"
+        highlight: a
