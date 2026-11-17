@@ -93,13 +93,26 @@ def _config(script: Path, explicit: Path | None, draft: bool = False) -> Config:
 @app.command()
 def validate(
     script: Annotated[Path, typer.Argument(help="The script.yaml to check.")],
+    strict: Annotated[bool, typer.Option("--strict", help="Treat warnings (an out-of-date manifest) as failures.")] = False,
 ) -> None:
-    """Check a script's schema, references and cues (no endpoints needed)."""
+    """Check a script's schema, references and cues (no endpoints needed), and its manifest."""
+    from vidgen.manifest import ManifestError, is_stale, manifest_path, read_manifest
+
     try:
         s = load_script(script)
     except ScriptError as e:
         for issue in e.issues:
             typer.echo(str(issue))
+        raise typer.Exit(1)
+    try:
+        m = read_manifest(manifest_path(script))
+    except ManifestError as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    warned = m is not None and is_stale(m, s)
+    if warned:
+        typer.echo("warn: manifest is out of date (script changed since publish)")
+    if warned and strict:
         raise typer.Exit(1)
     typer.echo(f"ok: {len(s.scenes)} scenes")
 
