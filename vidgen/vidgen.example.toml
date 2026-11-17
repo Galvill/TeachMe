@@ -1,0 +1,93 @@
+# vidgen.example.toml: copy to vidgen.toml and edit.
+#
+# vidgen looks for vidgen.toml in the script's folder, then at the git repo root, then in
+# ~/.config/vidgen/. The first file found is used whole (files are not merged). Without one,
+# the defaults shown here apply. Unknown keys are errors, so typos fail loudly.
+# "~" is expanded in paths.
+
+# Output frame size and rate. Script coordinates are always in a 1920x1080 design space.
+width = 1920
+height = 1080
+fps = 30
+draft = false              # true renders at 1280x720 for quick iterations
+ssaa = 1                   # supersample factor for the renderer
+scene_pad_s = 0.4          # silence added after each scene's last word or animation
+
+# Arrow (send step) duration, when a step doesn't set one.
+arrow_default_s = 1.2      # used when the next step is relative (+N)
+arrow_min_s = 0.6
+arrow_max_s = 2.5
+
+[paths]
+cache = "~/.cache/vidgen"  # build and cache dir; one subfolder per script slug
+# ffmpeg = "~/.cache/vidgen/bin/ffmpeg"   # default: ffmpeg on PATH
+node = "node"
+# renderer = "~/src/vidgen/renderer"      # default: renderer/ next to the package source
+
+# Text-to-speech endpoint (OpenAI-compatible POST {base_url}/audio/speech).
+# Narration text is sent to it: a remote endpoint sees your script.
+[tts]
+endpoint = "local-chatterbox"
+
+[tts.endpoints.local-chatterbox]
+base_url = "http://127.0.0.1:8004/v1"
+model = "chatterbox"
+voice = "default"
+api_key_env = ""                     # name of an env var holding the key; empty = no auth
+timeout_s = 120
+extra = { seed = 7, exaggeration = 0.5 }   # passed through in the request body
+license = "MIT"                      # recorded in bake-off results and the manifest
+
+# A remote endpoint, for example:
+# [tts.endpoints.remote]
+# base_url = "https://api.example.com/v1"
+# model = "tts-1-hd"
+# voice = "alloy"
+# api_key_env = "EXAMPLE_API_KEY"
+# license = "see provider terms"
+
+# Word-timestamp alignment endpoint (POST {base_url}/audio/transcriptions).
+[align]
+endpoint = "local-whisper"
+
+[align.endpoints.local-whisper]
+base_url = "http://127.0.0.1:8000/v1"
+model = "large-v3"
+
+# Global pronunciation dictionary, applied to whole words before TTS.
+# A script's own `pronunciations` are merged over it.
+[pronunciations]
+DNS = "D N S"
+TTL = "T T L"
+nginx = "engine x"
+
+[encoder]
+codec = "auto"             # auto | h264_nvenc | libx264
+crf = 18                   # libx264 quality
+cq = 19                    # h264_nvenc quality
+preset = "slow"
+
+# Optional background music, ducked under speech.
+# [music]
+# path = "~/music/bed.wav"
+# volume_db = -24
+
+[publish]
+default = "nas"
+
+[publish.targets.nas]
+type = "local"
+path = "~/vidgen-published"
+# public_base_url = "http://nas.local/vidgen"
+
+# [publish.targets.s3]
+# type = "s3"
+# bucket = "my-videos"
+# prefix = "teachme"
+# region = "eu-west-1"
+# endpoint_url = "https://minio.example.com"   # MinIO / R2 / Backblaze
+# public_base_url = "https://cdn.example.com/teachme"
+
+# Endpoints (names under [tts.endpoints]) that `vidgen bakeoff` compares.
+[bakeoff]
+endpoints = ["local-chatterbox"]
