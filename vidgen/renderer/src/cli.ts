@@ -1,6 +1,7 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { encodeScene, writeFrames } from './encode.js';
+import { lintScene } from './lint.js';
 import { buildModel, type Model } from './model.js';
 import { InputError, parseScene } from './scene.js';
 
@@ -126,9 +127,13 @@ async function frames(opts: Opts, io: Io): Promise<number> {
   return EXIT.ok;
 }
 
-async function lint(_opts: Opts, io: Io): Promise<number> {
-  io.err('lint is not implemented yet');
-  return EXIT.input;
+/** One JSON issue per line, then `{"densest":[...]}`; exit 1 when there is any issue. */
+async function lint(opts: Opts, io: Io): Promise<number> {
+  const m = await loadModel(one(opts, 'scene'));
+  const { issues, densest } = lintScene(m);
+  for (const i of issues) io.out(JSON.stringify(i));
+  io.out(JSON.stringify({ densest }));
+  return issues.length > 0 ? EXIT.lint : EXIT.ok;
 }
 
 /** Runs one CLI invocation (`argv` without node and script) and returns the exit code. */

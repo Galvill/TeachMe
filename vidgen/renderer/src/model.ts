@@ -54,12 +54,14 @@ export type BlockModel = Timed & {
   lineHeight: number;
   pad: number;
   rect: Rect;
+  /** Height of the terminal title bar above the lines (0 for plain text and code). */
+  titleBar: number;
   /** True when the author fixed the size; lines can then overflow it. */
   fixed: boolean;
   seed: number;
 };
 export type TextBoxModel = BlockModel;
-export type CodeModel = BlockModel & { lang: string; shell: boolean; typing: boolean; highlightLines: number[]; titleBar: number };
+export type CodeModel = BlockModel & { lang: string; shell: boolean; typing: boolean; highlightLines: number[] };
 
 export type CaptionModel = { start: number; text: TextModel };
 export type Star = { x: number; y: number; r: number; alpha: number };
@@ -164,7 +166,7 @@ function block(
   const w = size ? size[0] * s : Math.max(0, ...lineWidths) + 2 * pad;
   const h = size ? size[1] * s : titleBar + lines.length * lineHeight + 2 * pad;
   const rect = { x: at[0] * s - w / 2, y: at[1] * s - h / 2, w, h };
-  return { ...step, id, lines, lineWidths, px, lineHeight, pad, rect, fixed: size !== null, seed };
+  return { ...step, id, lines, lineWidths, px, lineHeight, pad, rect, titleBar, fixed: size !== null, seed };
 }
 
 export function buildModel(input: SceneInput): Model {
@@ -289,7 +291,7 @@ export function buildModel(input: SceneInput): Model {
         const shell = c.lang === 'shell';
         const titleBar = shell ? THEME.code.titleBar * s : 0;
         const b = block(s, timed, c.id, c.text, c.at, c.size, THEME.code, titleBar, seedOf(`code:${c.id}`));
-        codes.push({ ...b, lang: c.lang, shell, typing: c.typing, highlightLines: c.highlight_lines, titleBar });
+        codes.push({ ...b, lang: c.lang, shell, typing: c.typing, highlightLines: c.highlight_lines });
         break;
       }
     }
