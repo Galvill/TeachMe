@@ -76,6 +76,23 @@ def aligner_from_config(cfg: Config, name: str | None = None) -> Aligner:
     return Aligner(chosen, ep)
 
 
+def _match(asr: list[AsrWord], spoken: Spoken) -> list[int | None]:
+    """For each spoken token, the index of the ASR word it aligned to, or None."""
+    tokens = [norm(t) for t in spoken.tokens]
+    heard = [norm(w.text) for w in asr]
+    out: list[int | None] = [None] * len(tokens)
+    sm = difflib.SequenceMatcher(None, tokens, heard, autojunk=False)
+    for block in sm.get_matching_blocks():
+        for k in range(block.size):
+            out[block.a + k] = block.b + k
+    return out
+
+
+def matched_tokens(asr: list[AsrWord], spoken: Spoken) -> list[bool]:
+    """Per spoken token, whether the transcript matched it (the alignment :func:`map_words` uses)."""
+    return [j is not None for j in _match(asr, spoken)]
+
+
 def map_words(asr: list[AsrWord], spoken: Spoken, n: Narration, duration: float) -> list[WordTime]:
     """Word times 1:1 with ``n.words``.
 
@@ -84,13 +101,9 @@ def map_words(asr: list[AsrWord], spoken: Spoken, n: Narration, duration: float)
     fewer than half the tokens match; the caller prefixes the scene id.
     """
     tokens = [norm(t) for t in spoken.tokens]
-    heard = [norm(w.text) for w in asr]
-    times: list[tuple[float, float] | None] = [None] * len(tokens)
-    sm = difflib.SequenceMatcher(None, tokens, heard, autojunk=False)
-    for block in sm.get_matching_blocks():
-        for k in range(block.size):
-            w = asr[block.b + k]
-            times[block.a + k] = (w.start, w.end)
+    times: list[tuple[float, float] | None] = [
+        None if j is None else (asr[j].start, asr[j].end) for j in _match(asr, spoken)
+    ]
 
     countable = [i for i, t in enumerate(tokens) if t]
     matched = sum(1 for i in countable if times[i] is not None)

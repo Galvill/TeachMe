@@ -241,3 +241,36 @@ def publish(
         raise typer.Exit(2)
     write_manifest(manifest_path(script), m)
     typer.echo(f"published {m.slug} → {m.files.video.url or m.files.video.location}")
+
+
+@app.command()
+def bakeoff(
+    endpoints: Annotated[
+        Optional[str], typer.Option("--endpoints", help="Comma-separated [tts.endpoints] names (default: bakeoff.endpoints).")
+    ] = None,
+    out: Annotated[Optional[Path], typer.Option("--out", help="Clip dir (default: vidgen/bakeoff/clips/).")] = None,
+    passage: Annotated[Optional[Path], typer.Option("--passage", help="Passage file (default: vidgen/bakeoff/passage.md).")] = None,
+    results: Annotated[Optional[Path], typer.Option("--results", help="Results file (default: vidgen/bakeoff/results.md).")] = None,
+    config: ConfigOpt = None,
+) -> None:
+    """Synthesize the bake-off passage on each endpoint and write clips and results.md."""
+    from vidgen import bakeoff as b
+
+    try:
+        cfg = load_config(None, config)
+        names = [n.strip() for n in endpoints.split(",") if n.strip()] if endpoints else list(cfg.bakeoff.endpoints)
+        if not names:
+            raise ConfigError("no bake-off endpoints; set bakeoff.endpoints or pass --endpoints")
+        rows = b.run_bakeoff(cfg, passage or b.DEFAULT_PASSAGE, names, out or b.DEFAULT_CLIPS)
+    except (ConfigError, b.PassageError, OSError) as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    dest = results or b.DEFAULT_RESULTS
+    b.write_results(rows, dest)
+    for r in rows:
+        if r.error:
+            typer.echo(f"{r.endpoint}: error: {r.error}")
+        else:
+            rtf = "n/a" if r.rtf is None else f"{r.rtf:.3f}"
+            typer.echo(f"{r.endpoint}: rtf {rtf}, cue words aligned {r.cue_aligned}")
+    typer.echo(str(dest))
