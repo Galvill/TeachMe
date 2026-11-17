@@ -1,0 +1,256 @@
+"""Publishing. S3 goes through moto (or a stub client); nothing here touches the network."""
+
+import hashlib
+import json
+import shutil
+from pathlib import Path
+
+import boto3
+import pytest
+from moto import mock_aws
+
+from vidgen import publish as publish_mod
+from vidgen.config import Config, LocalTarget, Paths, Publish, S3Target
+from vidgen.contracts import dumps
+from vidgen.publish import PublishError, publish
+from vidgen.schema import load_script, script_hash
+
+FIXTURES = Path(__file__).parent / "fixtures"
+BUILD_FILES = {"video.mp4": b"\x00\x00\x00 ftypisom fake video", "captions.srt": b"1\n00:00:00,000 --> 00:00:01,000\nHi\n",
+               "poster.png": b"\x89PNG\r\n\x1a\n fake poster"}
+
+
+@pytest.fixture(autouse=True)
+def aws_env(monkeypatch, tmp_path):
+    """Dummy credentials and no config files, so boto3 never sees the developer's real profile."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "no-aws-config"))
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "no-aws-credentials"))
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
+    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("AWS_ENDPOINT_URL_S3", raising=False)
+
+
+@pytest.fixture
+def script(tmp_path) -> Path:
+    d = tmp_path / "videos" / "dns-mini"
+    d.mkdir(parents=True)
+    path = d / "script.yaml"
+    shutil.copyfile(FIXTURES / "dns-mini.yaml", path)
+    return path
+
+
+def make_build(script_path: Path, cache: Path, **over) -> Path:
+    """A finished build dir as ``vidgen build`` leaves it (fake media, real build.json)."""
+    s = load_script(script_path)
+    d = cache / "builds" / s.slug
+    d.mkdir(parents=True, exist_ok=True)
+    for name, data in BUILD_FILES.items():
+        (d / name).write_bytes(data)
+    meta = {
+        "version": 1, "slug": s.slug, "title": s.title, "scriptHash": script_hash(s),
+        "syncedCommit": s.syncedCommit, "sources": list(s.sources), "draft": False, "durationSec": 12.5,
+        "width": 1920, "height": 1080, "language": s.language,
+        "tts": {"endpoint": "fake", "model": "fake-model", "voice": "default", "license": "MIT"},
+        "vidgenVersion": "0.0.0",
+        "files": {"video": "video.mp4", "captions": "captions.srt", "poster": "poster.png", "timeline": "timeline.json"},
+    }
+    meta.update(over)
+    (d / "build.json").write_text(dumps(meta), encoding="utf-8")
+    return d
+
+
+def video_sha() -> str:
+    return hashlib.sha256(BUILD_FILES["video.mp4"]).hexdigest()
+
+
+def cfg_with(tmp_path, targets, default=None) -> Config:
+    return Config(paths=Paths(cache=tmp_path / "cache"), publish=Publish(default=default, targets=targets))
+
+
+# --- local --------------------------------------------------------------------------------
+
+
+def test_local_publish_layout(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    pub = tmp_path / "pub"
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=pub)}, default="nas")
+    m = publish(script, cfg)
+
+    objdir = pub / "dns-mini" / video_sha()[:12]
+    assert sorted(p.name for p in objdir.iterdir()) == ["captions.srt", "poster.png", "video.mp4"]
+    assert sorted(p.relative_to(pub).as_posix() for p in pub.rglob("*") if p.is_file()) == [
+        f"dns-mini/{video_sha()[:12]}/{n}" for n in ("captions.srt", "poster.png", "video.mp4")
+    ]
+    for role, name in (("video", "video.mp4"), ("captions", "captions.srt"), ("poster", "poster.png")):
+        ref = getattr(m.files, role)
+        assert ref.location == (objdir / name).resolve().as_uri()
+        assert ref.location.startswith("file:///")
+        assert ref.url is None
+        assert ref.sha256 == hashlib.sha256(BUILD_FILES[name]).hexdigest()
+        assert ref.bytes == len(BUILD_FILES[name])
+    assert m.target == "nas"
+    assert m.slug == "dns-mini"
+    assert m.resolution == (1920, 1080)
+    assert m.tts.engine == "fake" and m.tts.license == "MIT"
+    assert m.scriptHash == script_hash(load_script(script))
+
+
+def test_local_public_url(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub", public_base_url="http://nas.local/vidgen/")})
+    m = publish(script, cfg, target="nas")
+    h = video_sha()[:12]
+    assert m.files.video.url == f"http://nas.local/vidgen/dns-mini/{h}/video.mp4"
+    assert m.files.captions.url == f"http://nas.local/vidgen/dns-mini/{h}/captions.srt"
+    assert m.files.poster.url == f"http://nas.local/vidgen/dns-mini/{h}/poster.png"
+
+
+def test_local_never_writes_outside_path(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    pub = tmp_path / "pub"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    pub.mkdir()
+    (pub / "dns-mini").symlink_to(outside, target_is_directory=True)
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=pub)}, default="nas")
+    with pytest.raises(PublishError, match="escapes the publish path"):
+        publish(script, cfg)
+    assert list(outside.iterdir()) == []
+
+
+def test_build_file_outside_build_dir_refused(tmp_path, script):
+    make_build(script, tmp_path / "cache", files={"video": "../../x.mp4", "captions": "captions.srt",
+                                                   "poster": "poster.png"})
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")}, default="nas")
+    with pytest.raises(PublishError, match="outside the build dir"):
+        publish(script, cfg)
+
+
+# --- S3 -----------------------------------------------------------------------------------
+
+
+def s3_cfg(tmp_path, **target) -> Config:
+    t = S3Target(bucket="my-videos", prefix="teachme", region="us-east-1", **target)
+    return cfg_with(tmp_path, {"s3": t}, default="s3")
+
+
+def test_s3_upload_metadata(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    with mock_aws():
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket="my-videos")
+        m = publish(script, s3_cfg(tmp_path, public_base_url="https://cdn.example.com/teachme"))
+        h = video_sha()[:12]
+        types = {"video.mp4": "video/mp4", "captions.srt": "application/x-subrip", "poster.png": "image/png"}
+        for name, ctype in types.items():
+            key = f"teachme/dns-mini/{h}/{name}"
+            head = s3.head_object(Bucket="my-videos", Key=key)
+            assert head["ContentType"] == ctype
+            assert head["Metadata"]["sha256"] == hashlib.sha256(BUILD_FILES[name]).hexdigest()
+            body = s3.get_object(Bucket="my-videos", Key=key)["Body"].read()
+            assert body == BUILD_FILES[name]
+        assert m.files.video.location == f"s3://my-videos/teachme/dns-mini/{h}/video.mp4"
+        # public_base_url is the public root of the prefix (spec §10's example).
+        assert m.files.video.url == f"https://cdn.example.com/teachme/dns-mini/{h}/video.mp4"
+        assert m.target == "s3"
+
+
+def test_s3_skip_existing(tmp_path, script, monkeypatch):
+    make_build(script, tmp_path / "cache")
+    with mock_aws():
+        boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="my-videos")
+        cfg = s3_cfg(tmp_path)
+        publish(script, cfg)
+
+        uploads: list[str] = []
+        real_client = publish_mod._s3_client
+
+        def counting(t):
+            c = real_client(t)
+            orig = c.upload_file
+
+            def upload_file(filename, bucket, key, **kw):
+                uploads.append(key)
+                return orig(filename, bucket, key, **kw)
+
+            c.upload_file = upload_file
+            return c
+
+        monkeypatch.setattr(publish_mod, "_s3_client", counting)
+        m = publish(script, cfg)
+        assert uploads == []
+        assert m.files.video.url is None
+
+        # A key whose sha256 metadata doesn't match is uploaded again.
+        s3 = boto3.client("s3", region_name="us-east-1")
+        key = f"teachme/dns-mini/{video_sha()[:12]}/poster.png"
+        s3.put_object(Bucket="my-videos", Key=key, Body=b"other", Metadata={"sha256": "0" * 64})
+        publish(script, cfg)
+        assert uploads == [key]
+
+
+def test_s3_endpoint_url_passed(tmp_path, script, monkeypatch):
+    make_build(script, tmp_path / "cache")
+    calls: list[tuple[tuple, dict]] = []
+    real = boto3.client
+
+    def spy(*args, **kwargs):
+        calls.append((args, kwargs))
+        kwargs = {**kwargs, "endpoint_url": None}  # moto serves the default AWS endpoints
+        return real(*args, **kwargs)
+
+    with mock_aws():
+        real("s3", region_name="eu-west-1").create_bucket(
+            Bucket="my-videos", CreateBucketConfiguration={"LocationConstraint": "eu-west-1"}
+        )
+        monkeypatch.setattr(boto3, "client", spy)
+        t = S3Target(bucket="my-videos", region="eu-west-1", endpoint_url="https://minio.example.com")
+        m = publish(script, cfg_with(tmp_path, {"minio": t}), target="minio")
+    assert calls == [(("s3",), {"region_name": "eu-west-1", "endpoint_url": "https://minio.example.com"})]
+    assert m.files.video.location == f"s3://my-videos/dns-mini/{video_sha()[:12]}/video.mp4"
+
+
+# --- refusals -----------------------------------------------------------------------------
+
+
+def test_refuse_no_build(tmp_path, script):
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")}, default="nas")
+    with pytest.raises(PublishError, match="^no build for dns-mini; run vidgen build$"):
+        publish(script, cfg)
+
+
+def test_refuse_draft(tmp_path, script):
+    make_build(script, tmp_path / "cache", draft=True)
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")}, default="nas")
+    with pytest.raises(PublishError, match="^draft build; rebuild without --draft$"):
+        publish(script, cfg)
+    assert not (tmp_path / "pub").exists()
+
+
+def test_refuse_out_of_date(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    script.write_text(script.read_text().replace("title: ", "title: Changed ", 1))
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")}, default="nas")
+    with pytest.raises(PublishError, match="^build is out of date; run vidgen build$"):
+        publish(script, cfg)
+
+
+def test_no_target(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")})
+    with pytest.raises(PublishError, match=r"^no publish target; set publish\.default or pass --target$"):
+        publish(script, cfg)
+    with pytest.raises(PublishError, match='no publish target "nope"'):
+        publish(script, cfg, target="nope")
+
+
+def test_build_dir_override(tmp_path, script):
+    d = make_build(script, tmp_path / "elsewhere")
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")}, default="nas")
+    m = publish(script, cfg, build_dir=d)
+    assert json.loads((d / "build.json").read_text())["slug"] == m.slug
