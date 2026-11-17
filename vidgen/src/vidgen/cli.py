@@ -206,3 +206,38 @@ def lint(script: ScriptArg, config: ConfigOpt = None) -> None:
     p = _prepare(script, cfg)
     lint_all(cfg, p.scenes)
     typer.echo(f"ok: {len(p.scenes)} scenes, no lint issues")
+
+
+@app.command()
+@_guarded
+def publish(
+    script: ScriptArg,
+    target: Annotated[
+        Optional[str], typer.Option("--target", help="A [publish.targets] name (default: publish.default).")
+    ] = None,
+    build_dir: Annotated[
+        Optional[Path], typer.Option("--build-dir", help="Build dir (default: <cache>/builds/<slug>).")
+    ] = None,
+    config: ConfigOpt = None,
+) -> None:
+    """Upload the finished build to a target and write the manifest next to the script."""
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    from vidgen.manifest import manifest_path, write_manifest
+    from vidgen.publish import PublishError
+    from vidgen.publish import publish as run_publish
+
+    try:
+        m = run_publish(script, _config(script, config), target=target, build_dir=build_dir)
+    except PublishError as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    except ClientError as e:
+        err = e.response.get("Error", {})
+        typer.echo(f"s3: {err.get('Code', 'ClientError')}: {err.get('Message') or e}")
+        raise typer.Exit(2)
+    except BotoCoreError as e:  # NoCredentialsError, EndpointConnectionError, ...
+        typer.echo(f"s3: {type(e).__name__.removesuffix('Error')}: {e}")
+        raise typer.Exit(2)
+    write_manifest(manifest_path(script), m)
+    typer.echo(f"published {m.slug} → {m.files.video.url or m.files.video.location}")

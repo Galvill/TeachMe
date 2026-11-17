@@ -7,15 +7,20 @@ from pathlib import Path
 
 import boto3
 import pytest
+from botocore.exceptions import NoCredentialsError
 from moto import mock_aws
+from typer.testing import CliRunner
 
 from vidgen import publish as publish_mod
+from vidgen.cli import app
 from vidgen.config import Config, LocalTarget, Paths, Publish, S3Target
 from vidgen.contracts import dumps
+from vidgen.manifest import manifest_path, read_manifest
 from vidgen.publish import PublishError, publish
 from vidgen.schema import load_script, script_hash
 
 FIXTURES = Path(__file__).parent / "fixtures"
+runner = CliRunner()
 BUILD_FILES = {"video.mp4": b"\x00\x00\x00 ftypisom fake video", "captions.srt": b"1\n00:00:00,000 --> 00:00:01,000\nHi\n",
                "poster.png": b"\x89PNG\r\n\x1a\n fake poster"}
 
@@ -254,3 +259,114 @@ def test_build_dir_override(tmp_path, script):
     cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=tmp_path / "pub")}, default="nas")
     m = publish(script, cfg, build_dir=d)
     assert json.loads((d / "build.json").read_text())["slug"] == m.slug
+
+
+# --- the command --------------------------------------------------------------------------
+
+
+def write_toml(script_path: Path, tmp_path: Path, extra: str = "") -> Path:
+    p = script_path.parent / "vidgen.toml"
+    p.write_text(
+        f"""[paths]
+cache = "{tmp_path / 'cache'}"
+[publish]
+default = "nas"
+[publish.targets.nas]
+type = "local"
+path = "{tmp_path / 'pub'}"
+public_base_url = "http://nas.local/vidgen"
+{extra}""",
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_cli_publish_local_writes_manifest(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    write_toml(script, tmp_path)
+    r = runner.invoke(app, ["publish", str(script)])
+    assert r.exit_code == 0, r.output
+    h = video_sha()[:12]
+    assert r.output == f"published dns-mini → http://nas.local/vidgen/dns-mini/{h}/video.mp4\n"
+    mp = script.parent / "manifest.json"
+    assert mp == manifest_path(script)
+    m = read_manifest(mp)
+    assert m is not None and m.version == 1 and m.target == "nas"
+    assert m.files.video.location == (tmp_path / "pub" / "dns-mini" / h / "video.mp4").resolve().as_uri()
+    assert (tmp_path / "pub" / "dns-mini" / h / "video.mp4").read_bytes() == BUILD_FILES["video.mp4"]
+
+    # Without public_base_url the location is printed instead.
+    other = script.parent / "nourl.toml"
+    other.write_text(
+        f"""[paths]
+cache = "{tmp_path / 'cache'}"
+[publish.targets.plain]
+type = "local"
+path = "{tmp_path / 'pub2'}"
+""",
+        encoding="utf-8",
+    )
+    r = runner.invoke(app, ["publish", str(script), "--config", str(other), "--target", "plain"])
+    assert r.exit_code == 0, r.output
+    assert r.output.startswith("published dns-mini → file://")
+
+    # A PublishError exits 1 with its message.
+    r = runner.invoke(app, ["publish", str(script), "--config", str(other)])
+    assert r.exit_code == 1
+    assert r.output == "error: no publish target; set publish.default or pass --target\n"
+
+
+def test_republish_noop(tmp_path, script, monkeypatch):
+    make_build(script, tmp_path / "cache")
+    write_toml(script, tmp_path)
+    monkeypatch.setattr(publish_mod, "_now", lambda: "2026-11-17T10:00:00Z")
+    assert runner.invoke(app, ["publish", str(script)]).exit_code == 0
+    mp = manifest_path(script)
+    first = mp.read_bytes()
+    published = sorted((tmp_path / "pub").rglob("*.*"))
+    mtimes = [p.stat().st_mtime_ns for p in published]
+
+    monkeypatch.setattr(publish_mod, "_now", lambda: "2026-11-18T09:00:00Z")
+    r = runner.invoke(app, ["publish", str(script)])
+    assert r.exit_code == 0, r.output
+    assert mp.read_bytes() == first
+    assert [p.stat().st_mtime_ns for p in published] == mtimes
+
+    # A copy that actually happens (the published file went missing) updates publishedAt.
+    (published[0]).unlink()
+    assert runner.invoke(app, ["publish", str(script)]).exit_code == 0
+    m = read_manifest(mp)
+    assert m is not None and m.publishedAt == "2026-11-18T09:00:00Z"
+
+
+def test_no_credentials_exit_2(tmp_path, script, monkeypatch):
+    make_build(script, tmp_path / "cache")
+    write_toml(script, tmp_path, extra="""[publish.targets.s3]
+type = "s3"
+bucket = "my-videos"
+region = "eu-west-1"
+""")
+
+    class NoCreds:
+        def head_object(self, **kw):
+            raise NoCredentialsError()
+
+        def upload_file(self, *a, **kw):
+            raise NoCredentialsError()
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: NoCreds())
+    r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
+    assert r.exit_code == 2
+    assert r.output == "s3: NoCredentials: Unable to locate credentials\n"
+    assert not manifest_path(script).exists()
+
+    from botocore.exceptions import ClientError
+
+    class Denied(NoCreds):
+        def head_object(self, **kw):
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "HeadObject")
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: Denied())
+    r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
+    assert r.exit_code == 2
+    assert r.output == "s3: AccessDenied: Access Denied\n"
