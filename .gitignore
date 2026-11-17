@@ -2,3 +2,7 @@ node_modules
 dist
 .superpowers/
 .claude/worktrees/
+.venv/
+__pycache__/
+vidgen/bakeoff/clips/
+vidgen/bakeoff/envs/

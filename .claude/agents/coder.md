@@ -44,6 +44,16 @@ There is no linter in this repo; do not add one as a side effect. If a test in a
 
 If your change only shows up in a real browser (Mermaid/Shiki rendering, theme, quiz flow) or only through the installed tarball, say so in the PR body under a heading `Gate notes` so the Phase 7 gate knows where to look.
 
+## vidgen units
+
+Units that touch `vidgen/` (the Python video generator, Plans A-E in `docs/superpowers/plans/2026-11-17-vidgen-*.md`) run their own suite in addition to the root one. The root suite above still runs and must stay green; nothing under `vidgen/` changes it.
+
+- Plan A (core), from `vidgen/`: `uv sync && uv run pytest -m "not endpoint"`.
+- Plan B (renderer), from `vidgen/renderer/`: `npm ci && npm run typecheck && npm test && npm run build`. Encode tests need `ffmpeg` on `PATH` and skip without it.
+- Plan C (pipeline): Plan A's line, run after `npm ci && npm run build` in `vidgen/renderer/` with `ffmpeg` on `PATH`. Tests that need the renderer skip only when `dist/cli.js` is missing, and CI always builds it.
+
+Scope rule: release-please attributes commits by the file paths they touch (`vidgen/` belongs to the `vidgen` package; `exclude-paths` keeps it out of `.`), not by the commit scope. A vidgen commit must therefore touch only `vidgen/`, or teachme gets bumped too. Still title such commits and PRs `feat(vidgen):` / `fix(vidgen):` (`chore(vidgen):` etc. for unseen work) as a readability convention. Root-only changes keep the plain types.
+
 ## Verification receipt
 
 CI's `verify` job re-runs the suite on your PR head, but your receipt is what the orchestrator checks first, before it spends a CI round-trip. As you run the suite, append one line per command to `/tmp/teachme-verify/<branch-with-slashes-as-dashes>.log` (`mkdir -p /tmp/teachme-verify` first; truncate the file at the start of each verification pass — including a pass you're asked to redo after review feedback — so a stale `RESULT PASS` can't linger under a new failure):
