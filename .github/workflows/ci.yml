@@ -54,3 +54,23 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: .claude/scripts/integration-gate.sh
+
+  # The vidgen renderer (Node) and pipeline (Python) suites. The runner has no
+  # GPU, so the NVENC probe falls back to libx264 here.
+  vidgen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vidgen/renderer/package-lock.json
+      - run: sudo apt-get install -y ffmpeg
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: renderer
+        working-directory: vidgen/renderer
+        run: npm ci && npm run typecheck && npm test && npm run build
+      - name: pipeline
+        working-directory: vidgen
+        run: uv sync && uv run pytest -m "not endpoint"
