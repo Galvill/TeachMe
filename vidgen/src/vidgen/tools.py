@@ -89,11 +89,11 @@ def renderer_cli(cfg: Config) -> Path:
     return cli
 
 
-def run(cmd: list[str | Path]) -> subprocess.CompletedProcess[bytes]:
+def run(cmd: list[str | Path], cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
     """Run ``cmd`` capturing output; raise :class:`ToolFailed` with the stderr tail on failure."""
     args = [str(c) for c in cmd]
     try:
-        proc = subprocess.run(args, capture_output=True, check=False)
+        proc = subprocess.run(args, capture_output=True, check=False, cwd=cwd)
     except FileNotFoundError:
         raise ToolMissing(f"{args[0]} not found; {SETUP_HINT}") from None
     if proc.returncode != 0:
