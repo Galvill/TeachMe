@@ -158,13 +158,19 @@ def _s3_client(t: S3Target) -> Any:
     return boto3.client("s3", region_name=t.region or None, endpoint_url=t.endpoint_url or None)
 
 
+# HEAD error codes that mean "not known to exist, upload it". S3 answers 403 rather than 404
+# for a missing key when the caller lacks s3:ListBucket, which a publish-only policy often
+# doesn't grant; if the PUT is denied too, that error is reported.
+_S3_MISSING = ("404", "NoSuchKey", "NotFound", "403", "Forbidden", "AccessDenied")
+
+
 def _s3_has(client: Any, bucket: str, key: str, sha: str) -> bool:
     from botocore.exceptions import ClientError
 
     try:
         head = client.head_object(Bucket=bucket, Key=key)
     except ClientError as e:
-        if str(e.response.get("Error", {}).get("Code")) in ("404", "NoSuchKey", "NotFound"):
+        if str(e.response.get("Error", {}).get("Code")) in _S3_MISSING:
             return False
         raise
     return (head.get("Metadata") or {}).get("sha256") == sha
@@ -179,9 +185,11 @@ def _publish_s3(t: S3Target, rel_dir: str, srcs: list[_Source]) -> tuple[dict[st
     for s in srcs:
         key = f"{key_dir}/{s.name}"
         if not _s3_has(client, t.bucket, key, s.sha256):
-            client.upload_file(
-                str(s.path), t.bucket, key, ExtraArgs={"ContentType": s.content_type, "Metadata": {"sha256": s.sha256}}
-            )
+            # put_object, not upload_file: its failures are plain ClientErrors carrying S3's code.
+            with open(s.path, "rb") as body:
+                client.put_object(
+                    Bucket=t.bucket, Key=key, Body=body, ContentType=s.content_type, Metadata={"sha256": s.sha256}
+                )
             changed = True
         refs[s.role] = FileRef(
             location=f"s3://{t.bucket}/{key}",

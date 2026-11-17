@@ -7,7 +7,7 @@ from pathlib import Path
 
 import boto3
 import pytest
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import ClientError, NoCredentialsError
 from moto import mock_aws
 from typer.testing import CliRunner
 
@@ -196,13 +196,13 @@ def test_s3_skip_existing(tmp_path, script, monkeypatch):
 
         def counting(t):
             c = real_client(t)
-            orig = c.upload_file
+            orig = c.put_object
 
-            def upload_file(filename, bucket, key, **kw):
-                uploads.append(key)
-                return orig(filename, bucket, key, **kw)
+            def put_object(**kw):
+                uploads.append(kw["Key"])
+                return orig(**kw)
 
-            c.upload_file = upload_file
+            c.put_object = put_object
             return c
 
         monkeypatch.setattr(publish_mod, "_s3_client", counting)
@@ -370,22 +370,69 @@ region = "eu-west-1"
         def head_object(self, **kw):
             raise NoCredentialsError()
 
-        def upload_file(self, *a, **kw):
-            raise NoCredentialsError()
-
     monkeypatch.setattr(boto3, "client", lambda *a, **kw: NoCreds())
     r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
     assert r.exit_code == 2
     assert r.output == "s3: NoCredentials: Unable to locate credentials\n"
     assert not manifest_path(script).exists()
 
-    from botocore.exceptions import ClientError
 
-    class Denied(NoCreds):
+def _client_error(code: str, message: str, op: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": message}}, op)
+
+
+S3_TOML = """[publish.targets.s3]
+type = "s3"
+bucket = "my-videos"
+region = "us-east-1"
+"""
+
+
+def test_upload_failure_exit_2(tmp_path, script):
+    """A failing PUT (here: the bucket doesn't exist) is an s3 error, not a traceback."""
+    make_build(script, tmp_path / "cache")
+    write_toml(script, tmp_path, extra=S3_TOML)
+    with mock_aws():  # no bucket created
+        r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
+    assert r.exit_code == 2, r.output
+    assert r.output.startswith("s3: NoSuchBucket: ")
+    assert not manifest_path(script).exists()
+
+
+def test_head_403_uploads(tmp_path, script, monkeypatch):
+    """Without s3:ListBucket, HEAD of a missing key is 403: upload anyway, and report a denied PUT."""
+    make_build(script, tmp_path / "cache")
+    write_toml(script, tmp_path, extra=S3_TOML)
+    puts: list[str] = []
+
+    class NoList:
         def head_object(self, **kw):
-            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "HeadObject")
+            raise _client_error("403", "Forbidden", "HeadObject")
+
+        def put_object(self, **kw):
+            puts.append(kw["Key"])
+            assert kw["Metadata"]["sha256"] and kw["ContentType"]
+            return {}
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: NoList())
+    r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
+    assert r.exit_code == 0, r.output
+    assert [k.rsplit("/", 1)[1] for k in puts] == ["video.mp4", "captions.srt", "poster.png"]
+
+    class Denied(NoList):
+        def put_object(self, **kw):
+            raise _client_error("AccessDenied", "Access Denied", "PutObject")
 
     monkeypatch.setattr(boto3, "client", lambda *a, **kw: Denied())
     r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
     assert r.exit_code == 2
     assert r.output == "s3: AccessDenied: Access Denied\n"
+
+    class Broken(NoList):
+        def head_object(self, **kw):
+            raise _client_error("InternalError", "We encountered an internal error", "HeadObject")
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: Broken())
+    r = runner.invoke(app, ["publish", str(script), "--target", "s3"])
+    assert r.exit_code == 2
+    assert r.output == "s3: InternalError: We encountered an internal error\n"

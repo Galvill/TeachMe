@@ -221,6 +221,7 @@ def publish(
     config: ConfigOpt = None,
 ) -> None:
     """Upload the finished build to a target and write the manifest next to the script."""
+    from boto3.exceptions import Boto3Error
     from botocore.exceptions import BotoCoreError, ClientError
 
     from vidgen.manifest import manifest_path, write_manifest
@@ -236,7 +237,7 @@ def publish(
         err = e.response.get("Error", {})
         typer.echo(f"s3: {err.get('Code', 'ClientError')}: {err.get('Message') or e}")
         raise typer.Exit(2)
-    except BotoCoreError as e:  # NoCredentialsError, EndpointConnectionError, ...
+    except (BotoCoreError, Boto3Error) as e:  # NoCredentialsError, EndpointConnectionError, ...
         typer.echo(f"s3: {type(e).__name__.removesuffix('Error')}: {e}")
         raise typer.Exit(2)
     write_manifest(manifest_path(script), m)

@@ -24,7 +24,7 @@ One vLLM 0.11.2 thread also reports segfaults on a 5090
 | Candidate | Version (checked) | License; may generated audio be redistributed? | EN / IT | OpenAI-compatible server (port) | sm_120 / CUDA 12.8 | Cloning |
 |---|---|---|---|---|---|---|
 | **Kokoro-82M (baseline)** | v1.0, 2025-01-27 (checked 2026-11-17) | Apache-2.0 weights; yes, no output restriction stated | yes / yes (2 voices, graded C) | remsky/Kokoro-FastAPI (8880) | `latest-cu128` image tag | no (preset voices) |
-| Chatterbox | Multilingual V3 / Turbo / Nano; retired Aug 2026 (checked 2026-11-17) | MIT code and weights; yes, but outputs carry a PerTh watermark | yes / yes (Multilingual only) | devnen/Chatterbox-TTS-Server (8004) | cu128 compose file, explicit Blackwell support | yes, zero-shot |
+| Chatterbox | Multilingual V3 / Turbo / Nano; **retired, no longer maintained** since Aug 2026 (checked 2026-11-17) | MIT code and weights; yes, but outputs carry a PerTh watermark | yes / yes (Multilingual only) | devnen/Chatterbox-TTS-Server (8004) | cu128 compose file, explicit Blackwell support | yes, zero-shot |
 | Higgs Audio | v3 (4B), v2/v2.5; no dates given (checked 2026-11-17) | v3: research/non-commercial, **no**. v2: community license, free under 100k annual active users, attribution required | yes / unverified | official vLLM image for v2 (8000) | unverified | yes, zero-shot |
 | VibeVoice | Realtime-0.5B, 2025-12-03; TTS-1.5B code pulled 2025-09-05 (checked 2026-11-17) | MIT, but the card limits use to research; **no** for shared videos; audible disclaimer and watermark | yes / experimental | ncoder-ai/VibeVoice-FastAPI (8001) | cu128 install documented, Blackwell not mentioned | Large-7B only, on that server |
 | Fish Speech / OpenAudio | Drama 3; S2-Pro (tech report Mar 2026) (checked 2026-11-17) | Fish Audio Community License: you own outputs, but commercial use is free only under USD 500k revenue. S2-Pro: research license, **no** | yes / listed ("it") | vLLM-Omni (8091 in docs) | unverified | yes, 10–30 s reference |
@@ -33,8 +33,10 @@ One vLLM 0.11.2 thread also reports segfaults on a 5090
 | Orpheus TTS | 3B EN 2025-03-18; multilingual preview Apr 2025 (checked 2026-11-17) | Apache-2.0 on the cards; whether Llama terms apply is unverified | yes / yes (research preview) | Lex-au/Orpheus-FastAPI (5005) | unverified; upstream pins vLLM 0.7.3 | unreliable |
 | Qwen3-TTS | 0.6B / 1.7B, 2026-01-22 (checked 2026-11-17) | Apache-2.0 code and weights; yes, no output restriction shown | yes / yes | vLLM-Omni (8091), or groxaxo/Qwen3-TTS-Openai-Fastapi (8880) | unverified | yes, 3 s zero-shot |
 
-On licenses alone, the candidates that fit the redistribution constraint are Kokoro, Qwen3-TTS,
-Chatterbox and, with research-preview caveats, Orpheus. Higgs v2 and the Fish Community License are
+On licenses alone, the candidates that fit the redistribution constraint are Kokoro and
+Qwen3-TTS, plus Orpheus with research-preview caveats. Chatterbox's MIT license fits too, but the
+project is retired and no longer maintained, and its outputs are watermarked. Pick it only
+knowing that no fixes will come. Higgs v2 and the Fish Community License are
 usable with conditions. The rest are non-commercial, research-only or unclear. The bake-off table
 records each endpoint's `license` from `vidgen.toml`, so put the real one there.
 
