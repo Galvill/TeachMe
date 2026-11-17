@@ -115,6 +115,36 @@ def test_rebuild_reuses_all(fake_endpoint, script, tmp_path):
     assert (tmp_path / "out2" / "build.json").is_file()
 
 
+def test_language_change_realigns(fake_endpoint, script, tmp_path):
+    from vidgen.build import _synthesize
+    from vidgen.schema import load_script
+
+    cfg = _cfg(fake_endpoint.base_url, tmp_path / "cache")
+    _synthesize(load_script(script), cfg)
+    script.write_text(script.read_text().replace("language: en", "language: it"))
+    _, stats = _synthesize(load_script(script), cfg)
+    assert stats.synthesized == []  # the audio is reused
+    assert stats.aligned == ["intro", "ask-root"]  # but the transcription request changed
+    assert b'name="language"\r\n\r\nit' in fake_endpoint.requests[-1]["body"]
+
+
+def test_failed_rebuild_leaves_no_build_json(fake_endpoint, script, tmp_path, monkeypatch):
+    import vidgen.build as build_mod
+
+    cfg = _cfg(fake_endpoint.base_url, tmp_path / "cache")
+    r = build(script, cfg)
+    assert r.build_json.is_file()
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(build_mod, "write_srt", boom)  # fails after the mux
+    with pytest.raises(RuntimeError, match="disk full"):
+        build(script, cfg)
+    assert r.video.is_file()
+    assert not r.build_json.exists()
+
+
 def test_edit_one_scene(fake_endpoint, script, tmp_path):
     cfg = _cfg(fake_endpoint.base_url, tmp_path / "cache")
     build(script, cfg)

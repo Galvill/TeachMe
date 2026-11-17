@@ -470,7 +470,7 @@ def _check_steps(base: str, scene: Scene, nodes: dict[str, Node]) -> list[Issue]
 def check_script(script: Script) -> list[Issue]:
     """Cross-reference rules run after the models parse. Every issue found is reported."""
     issues: list[Issue] = []
-    if not SCENE_ID_RE.match(script.slug):
+    if not SCENE_ID_RE.fullmatch(script.slug):
         issues.append(Issue("slug", _msg("slug", slug=script.slug)))
     seen: set[str] = set()
     for i, scene in enumerate(script.scenes):
@@ -480,7 +480,7 @@ def check_script(script: Script) -> list[Issue]:
 
     for i, (scene, (nodes, layout)) in enumerate(zip(script.scenes, effective_diagrams(script))):
         base = f"scenes[{scene.id}]"
-        if not SCENE_ID_RE.match(scene.id):
+        if not SCENE_ID_RE.fullmatch(scene.id):
             issues.append(Issue(f"{base}.id", _msg("scene_id", id=scene.id)))
         if i == 0 and scene.diagram.inherit:
             issues.append(Issue(f"{base}.diagram.inherit", _msg("first_inherit")))

@@ -3,8 +3,9 @@
 Every expensive step is cached by content hash under ``<cfg.paths.cache>/objects``:
 
 - TTS: ``key(spoken text, endpoint, model, voice, extra, seed)``
-- alignment: ``key(tts key, align endpoint, model)``
-- scene video: ``key(scene JSON, sha256 of renderer dist/, encoder args, ssaa)``
+- alignment: ``key(tts key, align endpoint, model, language, extra)``
+- scene video: ``key(scene JSON, renderer hash, encoder args, ssaa)``, where the renderer hash
+  covers ``dist/``, ``fonts/`` and ``package-lock.json``
 
 so an unchanged rebuild calls no endpoint and renders no scene.
 """
@@ -22,7 +23,7 @@ from vidgen import __version__
 from vidgen.align import AlignError, AsrWord, aligner_from_config, map_words
 from vidgen.assemble import burn_captions, concat_video, loudnorm, mix_music, mux, narration_track, probe_duration, write_srt
 from vidgen.cache import Cache, build_dir, key, objects_root
-from vidgen.config import Config
+from vidgen.config import Config, Endpoint
 from vidgen.contracts import dumps, scene_json, timeline_json
 from vidgen.narration import parse_narration, to_spoken
 from vidgen.render import LintReport, frames, lint, render_scene, video_encoder_args
@@ -80,6 +81,11 @@ def _voice(script: Script, default: str) -> str:
     return script.voice if script.voice != "default" else default
 
 
+def alignment_key(tts_key: str, name: str, endpoint: Endpoint, language: str) -> str:
+    """Everything sent with the transcription request, so a changed request misses the cache."""
+    return key(tts_key, name, endpoint.model, language, endpoint.extra)
+
+
 def _synthesize(script: Script, cfg: Config) -> tuple[dict[str, SceneAudio], SynthStats]:
     cache = _cache(cfg)
     engine = engine_from_config(cfg)
@@ -99,7 +105,7 @@ def _synthesize(script: Script, cfg: Config) -> tuple[dict[str, SceneAudio], Syn
             stats.synthesized.append(scene.id)
         duration = probe_duration(wav, cfg)
 
-        align_key = key(tts_key, aligner.name, aligner.endpoint.model)
+        align_key = alignment_key(tts_key, aligner.name, aligner.endpoint, script.language)
         words_file = cache.path("align", align_key, "json")
         if words_file.is_file():
             asr = [AsrWord(**w) for w in json.loads(words_file.read_text(encoding="utf-8"))]
@@ -121,13 +127,19 @@ def synthesize_all(script: Script, cfg: Config) -> dict[str, SceneAudio]:
     return _synthesize(script, cfg)[0]
 
 
+RENDERER_INPUTS = ("dist", "fonts", "package-lock.json")
+
+
 def renderer_hash(cfg: Config) -> str:
-    """sha256 over the renderer's ``dist/`` (paths and contents), part of the scene cache key."""
-    dist = renderer_dir(cfg) / "dist"
+    """sha256 over the renderer's ``dist/``, ``fonts/`` and ``package-lock.json`` (paths and
+    contents): everything besides the scene JSON that changes the frames. Part of the scene key."""
+    root = renderer_dir(cfg)
     h = hashlib.sha256()
-    for p in sorted(dist.rglob("*")):
-        if p.is_file():
-            h.update(p.relative_to(dist).as_posix().encode() + b"\0")
+    for name in RENDERER_INPUTS:
+        base = root / name
+        files = [base] if base.is_file() else sorted(p for p in base.rglob("*") if p.is_file())
+        for p in files:
+            h.update(p.relative_to(root).as_posix().encode() + b"\0")
             h.update(p.read_bytes() + b"\0")
     return h.hexdigest()
 
@@ -141,8 +153,9 @@ class _Prepared:
     synth: SynthStats
 
 
-def _prepare(script_path: Path, cfg: Config) -> _Prepared:
-    script = load_script(Path(script_path))
+def _prepare(script_path: Path, cfg: Config, script: Script | None = None) -> _Prepared:
+    if script is None:
+        script = load_script(Path(script_path))
     audio, stats = _synthesize(script, cfg)
     tl = build_timeline(script, audio, cfg)
     scenes = {s.id: scene_json(script, tl, s.id, cfg) for s in script.scenes}
@@ -189,7 +202,18 @@ def _densest_global(p: _Prepared, reports: dict[str, LintReport]) -> list[tuple[
 
 
 def build(script_path: Path, cfg: Config, out: Path | None = None, burn: bool = False) -> BuildResult:
-    p = _prepare(script_path, cfg)
+    """Build the video into ``out`` (default ``<cache>/builds/<slug>``).
+
+    Any existing ``build.json`` is removed before anything else happens and written again
+    only after every output is in place, so its presence always means the files beside it are
+    from one finished build. A failed build leaves no ``build.json``.
+    """
+    script = load_script(Path(script_path))
+    d = _out_dir(script, cfg, out)
+    build_json = d / "build.json"
+    build_json.unlink(missing_ok=True)
+
+    p = _prepare(script_path, cfg, script)
     reports = lint_all(cfg, p.scenes)  # before any render
 
     enc_args = video_encoder_args(cfg)
@@ -202,7 +226,6 @@ def build(script_path: Path, cfg: Config, out: Path | None = None, burn: bool = 
         (rendered if did else reused).append(s.id)
         parts.append(path)
 
-    d = _out_dir(p.script, cfg, out)
     video = d / "video.mp4"
     captions = d / "captions.srt"
     poster = d / "poster.png"
@@ -256,7 +279,6 @@ def build(script_path: Path, cfg: Config, out: Path | None = None, burn: bool = 
         "vidgenVersion": __version__,
         "files": files,
     }
-    build_json = d / "build.json"
     build_json.write_text(dumps(meta), encoding="utf-8")  # last: its presence means the build finished
     return BuildResult(dir=d, build_json=build_json, video=video, captions=captions, poster=poster,
                        timeline=timeline_file, burned=burned, duration=p.timeline.total, rendered=rendered,
