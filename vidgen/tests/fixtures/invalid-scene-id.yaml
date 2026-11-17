@@ -1,0 +1,8 @@
+# A scene id with capitals and an underscore.
+title: Bad scene id
+scenes:
+  - id: Ask_Root
+    narration: "Ask the root."
+    diagram:
+      nodes:
+        a: {label: A, at: [200, 400]}

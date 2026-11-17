@@ -1,0 +1,11 @@
+# A text box reusing a node's id.
+title: Duplicate element
+scenes:
+  - id: intro
+    narration: "The browser is here."
+    diagram:
+      nodes:
+        browser: {label: Browser, at: [200, 400]}
+    steps:
+      - at: scene_start
+        text: {id: browser, text: "a note", at: [960, 700]}

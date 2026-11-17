@@ -1,0 +1,9 @@
+# inherit on the first scene.
+title: First scene inherits
+scenes:
+  - id: intro
+    narration: "Nothing came before."
+    diagram:
+      inherit: true
+      nodes:
+        a: {label: A, at: [200, 400]}
