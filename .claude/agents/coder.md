@@ -52,7 +52,7 @@ Units that touch `vidgen/` (the Python video generator, Plans A-E in `docs/super
 - Plan B (renderer), from `vidgen/renderer/`: `npm ci && npm run typecheck && npm test && npm run build`. Encode tests need `ffmpeg` on `PATH` and skip without it.
 - Plan C (pipeline): Plan A's line, run after `npm ci && npm run build` in `vidgen/renderer/` with `ffmpeg` on `PATH`. Tests that need the renderer skip only when `dist/cli.js` is missing, and CI always builds it.
 
-Scope rule: every commit and PR title that changes `vidgen/` uses the `feat(vidgen):` / `fix(vidgen):` scope (`chore(vidgen):` etc. for unseen work), so release-please attributes it to the `vidgen` package and does not bump teachme. Root-only changes keep the plain types.
+Scope rule: release-please attributes commits by the file paths they touch (`vidgen/` belongs to the `vidgen` package; `exclude-paths` keeps it out of `.`), not by the commit scope. A vidgen commit must therefore touch only `vidgen/`, or teachme gets bumped too. Still title such commits and PRs `feat(vidgen):` / `fix(vidgen):` (`chore(vidgen):` etc. for unseen work) as a readability convention. Root-only changes keep the plain types.
 
 ## Verification receipt
 
