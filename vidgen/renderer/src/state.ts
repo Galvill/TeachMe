@@ -43,7 +43,15 @@ export function easeOutBack(x: number): number {
 /** Node alpha: starts at 0 when `hidden`, then each show/hide fades linearly over its step. */
 export function nodeAlpha(m: Model, id: string, t: number): number {
   const n = m.nodes.find((x) => x.id === id);
-  let alpha = n && n.hidden ? 0 : 1;
+  return visibility(m, id, t, n && n.hidden ? 0 : 1);
+}
+
+/**
+ * Show/hide factor for any target (a node id, or a text/code element id): starts at `initial`
+ * and fades linearly toward 1 (show) or 0 (hide) over each step naming it.
+ */
+export function visibility(m: Model, id: string, t: number, initial = 1): number {
+  let alpha = initial;
   for (const v of m.visibility) {
     if (!v.nodes.includes(id) || t < v.start) continue;
     const target = v.show ? 1 : 0;
@@ -53,7 +61,7 @@ export function nodeAlpha(m: Model, id: string, t: number): number {
 }
 
 /**
- * Highlight state for a node: `glow` pulses 0->1->0 over the step, and once a highlight has
+ * Highlight state for a node or a text/code element id: `glow` pulses 0->1->0 over the step, and once a highlight has
  * started, `color` is the outline color it leaves behind (the latest highlight wins).
  */
 export function highlightAt(m: Model, id: string, t: number): { glow: number; color: string | null } {
@@ -140,12 +148,12 @@ export function elementsAt(m: Model, t: number): ElementState[] {
 
   for (const x of m.texts) {
     const p = ramp(t, x.start, x.duration);
-    el({ id: `text:${x.id}`, kind: 'text', alpha: p, progress: p, bbox: x.rect });
+    el({ id: `text:${x.id}`, kind: 'text', alpha: p * visibility(m, x.id, t), progress: p, bbox: x.rect });
   }
 
   for (const c of m.codes) {
     const p = ramp(t, c.start, c.duration);
-    const alpha = c.typing ? ramp(t, c.start, Math.min(0.25, c.duration)) : p;
+    const alpha = (c.typing ? ramp(t, c.start, Math.min(0.25, c.duration)) : p) * visibility(m, c.id, t);
     el({ id: `code:${c.id}`, kind: 'code', alpha, progress: p, bbox: c.rect });
   }
 

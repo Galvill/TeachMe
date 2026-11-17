@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { Canvas } from 'skia-canvas';
+import { drawFrame } from '../src/draw.js';
 import { buildModel } from '../src/model.js';
 import { parseScene } from '../src/scene.js';
 import { easeInOutCubic, elementsAt, highlightAt, type ElementState } from '../src/state.js';
@@ -30,6 +32,55 @@ function at(t: number, id: string): ElementState {
   if (!e) throw new Error(`no element ${id} at ${t}`);
   return e;
 }
+
+describe('show, hide and highlight on a code element', () => {
+  function codeScene(): Loose {
+    const j = baseScene();
+    j.scene.steps.push(
+      {
+        index: 1, start: 3.0, duration: 0.4, caption: null, action: 'code',
+        code: { id: 'dig', lang: 'shell', text: '$ dig example.com', at: [960, 760], size: null, typing: false, highlight_lines: [] },
+      },
+      { index: 2, start: 4.0, duration: 1.0, caption: null, action: 'highlight', highlight: { node: 'dig', color: null, pulse: true } },
+      { index: 3, start: 5.0, duration: 0.4, caption: null, action: 'hide', hide: ['dig'] },
+      { index: 4, start: 5.6, duration: 0.4, caption: null, action: 'show', show: ['dig'] },
+    );
+    j.scene.duration = 7;
+    return j;
+  }
+  const m = buildModel(parseScene(codeScene()));
+  const code = (t: number): ElementState => elementsAt(m, t).find((e) => e.id === 'code:dig')!;
+
+  it('hide fades the code block out', () => {
+    expect(code(3.5).alpha).toBe(1);
+    expect(code(5.2).alpha).toBeCloseTo(0.5, 6);
+    expect(code(5.45).alpha).toBe(0);
+  });
+
+  it('show brings it back', () => {
+    expect(code(5.8).alpha).toBeCloseTo(0.5, 6);
+    expect(code(6.5).alpha).toBe(1);
+  });
+
+  it('highlight pulses and leaves an outline', async () => {
+    expect(highlightAt(m, 'dig', 3.9)).toEqual({ glow: 0, color: null });
+    expect(highlightAt(m, 'dig', 4.5).glow).toBeCloseTo(1, 6);
+    expect(highlightAt(m, 'dig', 4.99).color).toBe('#f2c14e');
+    // The drawn border turns reply-gold once the highlight has started.
+    const r = m.codes[0]!.rect;
+    const border = (t: number): number[] => {
+      const c = new Canvas(m.width, m.height);
+      c.gpu = false;
+      const ctx = c.getContext('2d');
+      drawFrame(ctx, m, t);
+      return [...ctx.getImageData(Math.round(r.x + r.w / 2), Math.round(r.y + r.h - 1), 1, 1).data.slice(0, 3)];
+    };
+    const before = border(3.9);
+    const after = border(4.99);
+    expect(after).not.toEqual(before);
+    expect(after[0]!).toBeGreaterThan(before[0]! + 60); // gold has far more red than the muted gray
+  });
+});
 
 describe('elementsAt', () => {
   it('hidden node alpha 0 before show', () => {

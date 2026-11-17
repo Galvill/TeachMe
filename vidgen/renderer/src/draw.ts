@@ -104,6 +104,21 @@ function drawSend(ctx: CanvasRenderingContext2D, m: Model, e: ElementState, i: n
   }
 }
 
+/** The highlight pulse: a blurred reply-color ring around `r`, scaled by `amount` (0..1). */
+function glow(ctx: CanvasRenderingContext2D, m: Model, r: Rect, alpha: number, amount: number): void {
+  if (amount <= 0 || alpha <= 0) return;
+  const s = m.scale;
+  ctx.save();
+  ctx.globalAlpha = alpha * amount * 0.9;
+  ctx.shadowColor = THEME.colors.reply;
+  ctx.shadowBlur = 36 * s * amount;
+  ctx.strokeStyle = THEME.colors.reply;
+  ctx.lineWidth = 6 * s;
+  roundRect(ctx, r, 8 * s);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawNode(ctx: CanvasRenderingContext2D, m: Model, i: number, alpha: number, t: number): void {
   const n = m.nodes[i]!;
   if (alpha <= 0) return;
@@ -112,17 +127,7 @@ function drawNode(ctx: CanvasRenderingContext2D, m: Model, i: number, alpha: num
   const hl = highlightAt(m, n.id, t);
   const outline = hl.color ?? THEME.colors.teal;
 
-  if (hl.glow > 0) {
-    ctx.save();
-    ctx.globalAlpha = alpha * hl.glow * 0.9;
-    ctx.shadowColor = THEME.colors.reply;
-    ctx.shadowBlur = 36 * s * hl.glow;
-    ctx.strokeStyle = THEME.colors.reply;
-    ctx.lineWidth = 6 * s;
-    roundRect(ctx, r, 8 * s);
-    ctx.stroke();
-    ctx.restore();
-  }
+  glow(ctx, m, r, alpha, hl.glow);
 
   ctx.globalAlpha = alpha * 0.92;
   ctx.fillStyle = THEME.colors.panel;
@@ -187,24 +192,35 @@ function lines(ctx: CanvasRenderingContext2D, b: BlockModel, top: number, x: num
   });
 }
 
-function drawText(ctx: CanvasRenderingContext2D, m: Model, e: ElementState, i: number): void {
+function drawText(ctx: CanvasRenderingContext2D, m: Model, e: ElementState, i: number, t: number): void {
   const b = m.texts[i]!;
   if (e.alpha <= 0) return;
+  const hl = highlightAt(m, b.id, t);
+  glow(ctx, m, b.rect, e.alpha, hl.glow);
   ctx.globalAlpha = e.alpha;
+  if (hl.color) {
+    // A highlighted text box keeps a rough outline in the highlight color.
+    const r = b.rect;
+    ctx.strokeStyle = hl.color;
+    ctx.lineWidth = THEME.stroke * m.scale;
+    ctx.stroke(cached(m, `text:${b.id}:outline`, () => roughRect(r.x, r.y, r.w, r.h, { seed: b.seed, roughness: 0.8 })));
+  }
   const top = b.rect.y + (b.rect.h - b.lines.length * b.lineHeight) / 2;
   lines(ctx, b, top, b.rect.x + b.rect.w / 2, 'center', Infinity);
 }
 
-function drawCode(ctx: CanvasRenderingContext2D, m: Model, e: ElementState, c: CodeModel): void {
+function drawCode(ctx: CanvasRenderingContext2D, m: Model, e: ElementState, c: CodeModel, t: number): void {
   if (e.alpha <= 0) return;
   const s = m.scale;
   const r = c.rect;
+  const hl = highlightAt(m, c.id, t);
+  glow(ctx, m, r, e.alpha, hl.glow);
   ctx.globalAlpha = e.alpha;
   ctx.fillStyle = THEME.colors.code;
   roundRect(ctx, r, 10 * s);
   ctx.fill();
-  ctx.strokeStyle = THEME.colors.muted;
-  ctx.lineWidth = 1.5 * s;
+  ctx.strokeStyle = hl.color ?? THEME.colors.muted;
+  ctx.lineWidth = (hl.color ? THEME.stroke : 1.5) * s;
   ctx.stroke();
   if (c.shell) {
     ctx.save();
@@ -265,11 +281,11 @@ export function drawFrame(ctx: CanvasRenderingContext2D, m: Model, t: number): v
   });
   m.texts.forEach((x, i) => {
     const e = get(`text:${x.id}`);
-    if (e) drawText(ctx, m, e, i);
+    if (e) drawText(ctx, m, e, i, t);
   });
   for (const c of m.codes) {
     const e = get(`code:${c.id}`);
-    if (e) drawCode(ctx, m, e, c);
+    if (e) drawCode(ctx, m, e, c, t);
   }
 
   ctx.globalAlpha = 1;

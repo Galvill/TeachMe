@@ -301,25 +301,47 @@ function parseStep(v: unknown, path: string): StepIn {
   }
 }
 
-/** Nodes referenced by a step, with the JSON path of each reference. */
-function stepRefs(s: StepIn, path: string): [string, string][] {
+/**
+ * References a step makes, with the JSON path of each. `target` refs (highlight, show, hide) may
+ * name a node or a text/code element created by an earlier step; the others must name a node.
+ * These are the same rules as vidgen core's `need_node` / `need_target` (vidgen/src/vidgen/schema.py).
+ */
+type Ref = { id: string; path: string; target: boolean };
+
+function stepRefs(s: StepIn, path: string): Ref[] {
   const p = join(path, s.action);
+  const node = (id: string, at: string): Ref => ({ id, path: at, target: false });
+  const target = (id: string, at: string): Ref => ({ id, path: at, target: true });
   switch (s.action) {
     case 'send':
-      return [[s.send.from, join(p, 'from')], [s.send.to, join(p, 'to')]];
+      return [node(s.send.from, join(p, 'from')), node(s.send.to, join(p, 'to'))];
     case 'highlight':
-      return [[s.highlight.node, join(p, 'node')]];
+      return [target(s.highlight.node, join(p, 'node'))];
     case 'show':
-      return s.show.map((n, i): [string, string] => [n, join(p, i)]);
+      return s.show.map((n, i) => target(n, join(p, i)));
     case 'hide':
-      return s.hide.map((n, i): [string, string] => [n, join(p, i)]);
+      return s.hide.map((n, i) => target(n, join(p, i)));
     case 'badge':
-      return [[s.badge.near, join(p, 'near')]];
+      return [node(s.badge.near, join(p, 'near'))];
     case 'group':
-      return s.group.nodes.map((n, i): [string, string] => [n, join(join(p, 'nodes'), i)]);
+      return s.group.nodes.map((n, i) => node(n, join(join(p, 'nodes'), i)));
     default:
       return [];
   }
+}
+
+/** Throws on a reference to an unknown node, or to an element that no earlier step created. */
+function checkRefs(nodes: Record<string, NodeIn>, steps: StepIn[]): void {
+  const elements = new Set<string>();
+  steps.forEach((s, i) => {
+    for (const r of stepRefs(s, join('scene.steps', i))) {
+      if (r.id in nodes) continue;
+      if (!r.target) throw new InputError(`unknown node "${r.id}"`, r.path);
+      if (!elements.has(r.id)) throw new InputError(`unknown node or element "${r.id}"`, r.path);
+    }
+    if (s.action === 'text') elements.add(s.text.id);
+    if (s.action === 'code') elements.add(s.code.id);
+  });
 }
 
 /** Validates and normalizes one scene JSON value. Throws `InputError` naming the JSON path. */
@@ -350,11 +372,7 @@ export function parseScene(json: unknown): SceneInput {
   if (!Array.isArray(rawSteps)) throw new InputError('expected a list', 'scene.steps');
   const steps = rawSteps.map((s, i) => parseStep(s, join('scene.steps', i)));
 
-  steps.forEach((s, i) => {
-    for (const [ref, p] of stepRefs(s, join('scene.steps', i))) {
-      if (!(ref in nodes)) throw new InputError(`unknown node "${ref}"`, p);
-    }
-  });
+  checkRefs(nodes, steps);
 
   return {
     version: 1,
