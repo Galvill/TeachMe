@@ -29,7 +29,16 @@ vidgen lint script.yaml                # overlap and overflow checks on every sc
 vidgen preview script.yaml --t 12.5    # PNG frames at whole-video times (default: densest 3)
 vidgen render script.yaml --scene 2    # one scene, to scenes/02-<id>.mp4
 vidgen build script.yaml [--draft] [--burn-captions] [--out DIR]
+vidgen publish script.yaml [--target NAME] [--build-dir DIR]
+vidgen validate --strict script.yaml   # also fail when the published manifest is out of date
+vidgen bakeoff [--endpoints a,b] [--out DIR]   # compare TTS endpoints; see bakeoff/CANDIDATES.md
 ```
+
+`publish` copies or uploads a finished, non-draft, up-to-date build to a `[publish.targets]`
+entry (a local path or S3) under `<prefix>/<slug>/<sha256(video)[:12]>/`, and writes
+`manifest.json` next to `script.yaml` (`<stem>.manifest.json` for any other file name). Commit
+the manifest; the video never enters git. S3 credentials come from the standard AWS chain.
+Publishing an unchanged build changes nothing, not even the manifest. An S3 failure exits 2.
 
 A build writes `video.mp4`, `captions.srt`, `poster.png`, `timeline.json` and, last,
 `build.json` into `~/.cache/vidgen/builds/<slug>/` (or `--out`). TTS, alignment and scene
