@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2",
     "typer",
     "ruamel.yaml",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

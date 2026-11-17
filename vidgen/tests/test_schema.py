@@ -118,6 +118,33 @@ def test_slug_default(tmp_path):
     assert load_script(_script(folder, "slug: given\n" + body, "script.yaml")).slug == "given"
 
 
+def test_slug_rejects_paths(tmp_path):
+    body = BASE + "      - at: scene_start\n        highlight: a\n"
+    for bad in ("../x", "a/b", "Upper", "-lead", ""):
+        p = _script(tmp_path, f'slug: "{bad}"\n' + body, "a.yaml")
+        assert _issues(p) == [f'slug: slug "{bad}" must match ^[a-z0-9][a-z0-9-]*$']
+
+
+def test_slug_and_scene_id_reject_trailing_newline(tmp_path):
+    body = BASE + "      - at: scene_start\n        highlight: a\n"
+    p = _script(tmp_path, 'slug: "abc\\n"\n' + body, "a.yaml")
+    assert _issues(p) == ['slug: slug "abc\n" must match ^[a-z0-9][a-z0-9-]*$']
+    p = _script(tmp_path, "slug: ok\n" + body.replace("  - id: intro\n", '  - id: "intro\\n"\n'), "b.yaml")
+    assert 'scene id "intro\n" must match ^[a-z0-9][a-z0-9-]*$' in "\n".join(_issues(p))
+
+
+def test_default_slug_always_valid(tmp_path):
+    from vidgen.schema import SCENE_ID_RE, default_slug
+
+    body = BASE + "      - at: scene_start\n        highlight: a\n"
+    odd = tmp_path / "My Video_v2 (final)"
+    odd.mkdir()
+    assert load_script(_script(odd, body, "script.yaml")).slug == "my-video-v2-final"
+    assert load_script(_script(tmp_path, body, "..Weird..name!.yaml")).slug == "weird-name"
+    for path in ("___.yaml", "ünï/script.yaml", "-x-.yaml", "..yaml"):
+        assert SCENE_ID_RE.fullmatch(default_slug(Path(path)))
+
+
 def test_script_hash_ignores_comments(tmp_path):
     body = BASE + "      - at: scene_start\n        highlight: a\n"
     a = load_script(_script(tmp_path, body, "a.yaml"))
