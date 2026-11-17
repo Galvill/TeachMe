@@ -97,3 +97,6 @@ def test_encoders_parsing(tmp_path):
     (tmp_path / "listing.txt").write_text(listing)
     ff = _exe(tmp_path / "ffmpeg", f'cat "{tmp_path / "listing.txt"}"')
     assert tools.encoders(ff) == {"libx264", "h264_nvenc", "aac"}
+    # Listed but unusable (no GPU): a test encode fails, so h264_nvenc doesn't count.
+    ff = _exe(tmp_path / "ffmpeg2", f'case "$*" in *lavfi*) exit 1;; esac\ncat "{tmp_path / "listing.txt"}"')
+    assert tools.encoders(ff) == {"libx264", "aac"}

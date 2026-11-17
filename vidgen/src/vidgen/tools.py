@@ -117,9 +117,30 @@ def _listing(ffmpeg: Path, flag: str) -> set[str]:
     return names
 
 
+# Hardware encoders that distro builds often list but can't open without the GPU and driver.
+_PROBED = ("h264_nvenc",)
+
+
+def _encoder_works(ffmpeg: Path, name: str) -> bool:
+    cmd = [str(ffmpeg), "-hide_banner", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.1",
+           "-c:v", name, "-f", "null", "-"]
+    try:
+        return subprocess.run(cmd, capture_output=True, check=False, timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def encoders(ffmpeg: Path) -> set[str]:
-    """Encoder names this ffmpeg was built with."""
-    return _listing(ffmpeg, "-encoders")
+    """Encoder names this ffmpeg can use.
+
+    Hardware encoders (``h264_nvenc``) count only when a tiny test encode succeeds: a distro
+    ffmpeg lists them even on a machine with no NVIDIA GPU.
+    """
+    names = _listing(ffmpeg, "-encoders")
+    for name in _PROBED:
+        if name in names and not _encoder_works(ffmpeg, name):
+            names.discard(name)
+    return names
 
 
 def filters(ffmpeg: Path) -> set[str]:
