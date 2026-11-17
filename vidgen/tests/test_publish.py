@@ -128,6 +128,25 @@ def test_local_never_writes_outside_path(tmp_path, script):
     assert list(outside.iterdir()) == []
 
 
+def test_local_planted_temp_symlink_not_followed(tmp_path, script):
+    make_build(script, tmp_path / "cache")
+    pub = tmp_path / "pub"
+    objdir = pub / "dns-mini" / video_sha()[:12]
+    objdir.mkdir(parents=True)
+    victim = tmp_path / "victim.txt"
+    victim.write_bytes(b"untouched")
+    # Symlinks at the old predictable temp names, and at a final name, all pointing outside.
+    for name in BUILD_FILES:
+        (objdir / f".{name}.tmp").symlink_to(victim)
+    (objdir / "poster.png").symlink_to(victim)
+    cfg = cfg_with(tmp_path, {"nas": LocalTarget(path=pub)}, default="nas")
+    publish(script, cfg)
+    assert victim.read_bytes() == b"untouched"
+    for name, data in BUILD_FILES.items():
+        assert not (objdir / name).is_symlink()
+        assert (objdir / name).read_bytes() == data
+
+
 def test_build_file_outside_build_dir_refused(tmp_path, script):
     make_build(script, tmp_path / "cache", files={"video": "../../x.mp4", "captions": "captions.srt",
                                                    "poster": "poster.png"})

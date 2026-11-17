@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -117,6 +118,23 @@ def _local_dir(t: LocalTarget, rel_dir: str) -> Path:
     return dest
 
 
+def _atomic_copy(src: Path, dest_dir: Path, dest: Path) -> None:
+    """Copy ``src`` to ``dest`` through a fresh temp file in ``dest_dir``.
+
+    The temp file is created with ``mkstemp`` (``O_CREAT|O_EXCL``, a random name), so a
+    symlink planted in ``dest_dir`` is never followed; ``os.replace`` then swaps in the file
+    and replaces a symlink at ``dest`` itself, never its target.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=dest_dir, prefix=f".{dest.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
+            shutil.copyfileobj(inp, out, CHUNK)
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def _publish_local(t: LocalTarget, rel_dir: str, srcs: list[_Source]) -> tuple[dict[str, FileRef], bool]:
     dest_dir = _local_dir(t, rel_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -126,12 +144,7 @@ def _publish_local(t: LocalTarget, rel_dir: str, srcs: list[_Source]) -> tuple[d
     for s in srcs:
         dest = dest_dir / s.name
         if dest.is_symlink() or not (dest.is_file() and sha256_file(dest) == s.sha256):
-            tmp = dest_dir / f".{s.name}.tmp"
-            try:
-                shutil.copyfile(s.path, tmp)
-                os.replace(tmp, dest)  # replaces a symlink itself, never its target
-            finally:
-                tmp.unlink(missing_ok=True)
+            _atomic_copy(s.path, dest_dir, dest)
             changed = True
         refs[s.role] = FileRef(
             location=dest.as_uri(), url=_url(t.public_base_url, f"{rel_dir}/{s.name}"), sha256=s.sha256, bytes=s.size
