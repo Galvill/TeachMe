@@ -1,0 +1,13 @@
+# Two scenes with the same id.
+title: Duplicate scene
+scenes:
+  - id: intro
+    narration: "One."
+    diagram:
+      nodes:
+        a: {label: A, at: [200, 400]}
+  - id: intro
+    narration: "Two."
+    diagram:
+      nodes:
+        a: {label: A, at: [200, 400]}

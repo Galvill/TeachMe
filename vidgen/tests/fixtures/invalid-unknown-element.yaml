@@ -1,0 +1,13 @@
+# A hide naming a code block before any step defines it.
+title: Unknown element
+scenes:
+  - id: intro
+    narration: "Run dig, then hide it."
+    diagram:
+      nodes:
+        browser: {label: Browser, at: [200, 400]}
+    steps:
+      - at: scene_start
+        hide: [dig]
+      - at: "@cue:dig"
+        code: {id: dig, lang: shell, text: "$ dig example.com", at: [960, 700]}

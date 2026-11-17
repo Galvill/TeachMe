@@ -1,0 +1,10 @@
+# A layout row naming a node the diagram doesn't declare.
+title: Layout names an undeclared node
+scenes:
+  - id: intro
+    narration: "Browser and resolver."
+    diagram:
+      layout: {row: [browser, resolver, root]}
+      nodes:
+        browser: {label: Browser}
+        resolver: {label: Resolver}

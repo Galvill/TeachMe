@@ -1,0 +1,25 @@
+{
+  "name": "@teachme/vidgen-renderer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Renders vidgen scene JSON to MP4 and PNG frames, and lints scenes for overlaps.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "roughjs": "^4.6.6",
+    "skia-canvas": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}

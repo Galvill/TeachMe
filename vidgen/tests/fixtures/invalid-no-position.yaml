@@ -1,0 +1,11 @@
+# A node with no at that the layout doesn't place.
+title: Node without a position
+scenes:
+  - id: intro
+    narration: "Browser, resolver and root."
+    diagram:
+      layout: {row: [browser, resolver]}
+      nodes:
+        browser: {label: Browser}
+        resolver: {label: Resolver}
+        root: {label: Root server}

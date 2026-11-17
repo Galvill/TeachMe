@@ -1,0 +1,18 @@
+# highlight_lines naming a line past the end of a two-line code block.
+title: Highlight out of range
+scenes:
+  - id: intro
+    narration: "Run dig."
+    diagram:
+      nodes:
+        a: {label: A, at: [200, 400]}
+    steps:
+      - at: "@cue:dig"
+        code:
+          id: dig
+          lang: shell
+          text: |
+            $ dig example.com
+            example.com. 300 IN A 93.184.216.34
+          at: [960, 700]
+          highlight_lines: [2, 3]
