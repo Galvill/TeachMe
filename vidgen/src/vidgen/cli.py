@@ -164,6 +164,26 @@ def preview(
 
 
 @app.command()
+def doctor(
+    script: Annotated[Optional[Path], typer.Argument(help="Find vidgen.toml as for this script.")] = None,
+    config: ConfigOpt = None,
+) -> None:
+    """Check Python, Node, the renderer, ffmpeg and its encoders, and every configured endpoint."""
+    from vidgen.doctor import doctor as run_doctor
+
+    try:
+        cfg = load_config(script, config)
+    except ConfigError as e:
+        typer.echo(f"fail config: {e}")
+        raise typer.Exit(1)
+    checks = run_doctor(cfg)
+    for c in checks:
+        typer.echo(str(c))
+    if any(c.status == "fail" for c in checks):
+        raise typer.Exit(1)
+
+
+@app.command()
 @_guarded
 def lint(script: ScriptArg, config: ConfigOpt = None) -> None:
     """Lint every scene for overlaps and overflow (needs TTS for timing)."""
