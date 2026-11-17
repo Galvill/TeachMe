@@ -37,6 +37,7 @@ MESSAGES: dict[str, str] = {
     "duplicate_element": 'duplicate element id "{id}"',
     "duplicate_scene": 'duplicate scene id "{id}"',
     "scene_id": 'scene id "{id}" must match ^[a-z0-9][a-z0-9-]*$',
+    "slug": 'slug "{slug}" must match ^[a-z0-9][a-z0-9-]*$',
     "cue_not_found": 'cue "{name}" not found in the narration',
     "cue_not_after": 'cue "{name}" not found in the narration after the previous cue',
     "cue_occurrence": 'cue "{name}" has no occurrence #{n} in the narration',
@@ -330,7 +331,14 @@ def _read_yaml(path: Path) -> Any:
 
 
 def default_slug(path: Path) -> str:
-    return path.parent.name if path.name == "script.yaml" else path.stem
+    """The folder name for ``script.yaml``, else the file stem, made into a valid slug.
+
+    Lowercased, every run of other characters becomes ``-``, and the ends are trimmed:
+    ``"My Video_v2.yaml"`` gives ``"my-video-v2"``. A name with nothing usable gives ``"video"``.
+    """
+    name = path.parent.name if path.name == "script.yaml" else path.stem
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or "video"
 
 
 def load_script(path: Path) -> Script:
@@ -462,6 +470,8 @@ def _check_steps(base: str, scene: Scene, nodes: dict[str, Node]) -> list[Issue]
 def check_script(script: Script) -> list[Issue]:
     """Cross-reference rules run after the models parse. Every issue found is reported."""
     issues: list[Issue] = []
+    if not SCENE_ID_RE.match(script.slug):
+        issues.append(Issue("slug", _msg("slug", slug=script.slug)))
     seen: set[str] = set()
     for i, scene in enumerate(script.scenes):
         if scene.id in seen:

@@ -1,3 +1,5 @@
+import pytest
+
 from vidgen.cache import Cache, build_dir, key, objects_root
 
 
@@ -14,7 +16,13 @@ def test_path_layout(tmp_path):
     cache = Cache(objects_root(tmp_path))
     k = key("x")
     assert cache.path("tts", k, "wav") == tmp_path / "objects" / "tts" / k[:2] / f"{k}.wav"
-    assert build_dir(tmp_path, "dns") == tmp_path / "builds" / "dns"
+    assert build_dir(tmp_path, "dns") == (tmp_path / "builds" / "dns").resolve()
+
+
+def test_build_dir_stays_under_builds(tmp_path):
+    for bad in ("../x", "../../etc", "a/b", "/abs", ".", ""):
+        with pytest.raises(ValueError, match="escapes the build folder"):
+            build_dir(tmp_path, bad)
 
 
 def test_write_atomic(tmp_path):

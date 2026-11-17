@@ -26,7 +26,15 @@ def objects_root(cache_dir: Path) -> Path:
 
 
 def build_dir(cache_dir: Path, slug: str) -> Path:
-    return Path(cache_dir) / "builds" / slug
+    """``<cache>/builds/<slug>``; raises ``ValueError`` if ``slug`` would escape ``builds/``.
+
+    The schema already restricts slugs to ``^[a-z0-9][a-z0-9-]*$``; this is defense in depth.
+    """
+    builds = (Path(cache_dir) / "builds").resolve()
+    d = (builds / slug).resolve()
+    if d.parent != builds:
+        raise ValueError(f'slug "{slug}" escapes the build folder {builds}')
+    return d
 
 
 class Cache:
