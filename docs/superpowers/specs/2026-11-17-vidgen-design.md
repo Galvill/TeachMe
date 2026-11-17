@@ -18,7 +18,7 @@ hand-drawn-style diagrams.
   standalone videos they can watch or share.
 - **This spec covers:** the standalone utility and its skill, built in this repo, with
   the data shapes TeachMe will need later. The TeachMe integration itself is a later project
-  (§13).
+  (§14).
 
 Success: an agent using the skill on a repo writes a script grounded in the code, and
 `vidgen build` produces a 1080p video with narration in sync with the arrows and no overlapping
@@ -45,7 +45,7 @@ next to the script.
 - A skill so a coding agent can author, check, build and publish videos without help.
 
 **Non-goals (v1)**
-- TeachMe UI embedding, `teachme validate`/`status` support for videos (§13).
+- TeachMe UI embedding, `teachme validate`/`status` support for videos (§14).
 - Diagram shapes beyond box-and-arrow plus code/terminal blocks (§14 lists next shapes).
 - Hosting, downloading or running TTS/alignment models (they live behind endpoints the user runs
   or points to); cloud rendering; multi-user hosting; an interactive editor or preview studio.
@@ -59,7 +59,7 @@ next to the script.
 - A diagram that shows something the code doesn't do (the skill's grounding rule).
 - A license that blocks sharing the videos or using vidgen from an MIT repo.
 
-## 3. Constraints
+## Constraints
 
 - **Hardware/OS:** vidgen runs on Linux or Windows via WSL2, CPU only, with no PyTorch or CUDA in
   its env. The user's main box has an RTX 5090 (32 GB, Blackwell sm_120). Model servers run there are
@@ -201,7 +201,8 @@ scenes:
 - `scene_start`: time 0 of the scene.
 - `+0.5`: 0.5 s after the previous step's animation *ends*.
 - `@cue:word`: the start of the first spoken word matching `word` (case-insensitive, punctuation
-  stripped) after the previous cue in this scene. `@cue:word#2` selects the 2nd occurrence.
+  stripped) after the previous cue in this scene. `@cue:word#2` selects the 2nd occurrence counted
+  from the scene start, ignoring the previous cue.
 - Inline markers: narration may contain `{mark}` tokens, which are stripped before TTS.
   `@cue:mark` resolves to the start of the word that follows the marker. This is for cases where
   the right moment isn't a distinctive word.
@@ -226,6 +227,11 @@ narration.
 **Layout helpers:** `layout: {row: [...]}` / `{column: [...]}` / `{grid: {cols: 3, nodes: [...]}}`
 auto-place nodes that have no `at`. Arrows attach to box edges automatically, picking the facing
 edges and adding the perpendicular pair offsets.
+
+**Scene continuity** (my call): `diagram: {inherit: true, …}` starts the scene with the previous
+scene's nodes, in their positions and their visibility at its end. Arrows, badges and text are
+not carried over. Nodes listed in the scene override or add to the inherited ones. Without
+`inherit`, a scene's diagram stands alone.
 
 **Validation** uses pydantic. Unknown fields are errors (typos fail loudly). Node references in
 steps must exist. The format is documented in `vidgen/skill/vidgen-authoring/reference/format.md`.
@@ -384,9 +390,10 @@ public_base_url = "https://cdn.example.com/teachme"   # optional
   renderer deps and builds it. It checks for an ffmpeg with `h264_nvenc` and `loudnorm`. If none is found, it downloads a pinned
   static Linux build into `~/.cache/vidgen/bin/` without sudo (my call). It also fetches fonts. It downloads no
   models. It is idempotent and prints what it did, then runs `vidgen doctor`.
-- **Installing the CLI for use from other repos** (my call): `uv tool install ./vidgen` puts `vidgen` on
-  `PATH`. The renderer's built `dist/` ships inside the Python package as package data, and Node 20+ is a
-  runtime requirement that `vidgen doctor` checks.
+- **Installing the CLI for use from other repos** (my call): setup runs `uv tool install --editable ./vidgen`, which puts
+  `vidgen` on `PATH`. The renderer is found next to the package source (`vidgen/renderer/`, holding
+  `dist/` and `node_modules/` from setup), or at `paths.renderer` in config. It isn't bundled,
+  because skia-canvas is a native addon. Node 20+ is a runtime requirement that `vidgen doctor` checks.
 - `vidgen.toml` (searched in the script's folder, then the repo root, then `~/.config/vidgen/`) holds resolution,
   fps, draft mode, TTS and alignment endpoints, the pronunciation dictionary, paths (cache,
   ffmpeg), encoder settings and publish targets. `vidgen.example.toml` is committed, with a local
@@ -468,6 +475,21 @@ Commit after each stage.
 8. `vidgen-authoring` skill.
 9. README (install, endpoint setup, format reference, troubleshooting, encoder measurement),
    `vidgen/CLAUDE.md`, and the CI job.
+
+## Delivery plans
+
+- **A, core** (`docs/superpowers/plans/2026-11-17-vidgen-A-core.md`): repo plumbing (release-please
+  split, coder brief), the Python package, config, script schema, narration parsing, cue
+  resolution, timeline, and the scene-JSON contract the renderer consumes. Covers stages 1–2.
+- **B, renderer** (`…-B-renderer.md`): the Node/TS renderer: look, layout, elements, encoding, preview
+  frames, linter and golden frame. Covers stages 3 and 5. Starts once A's contracts are fixed.
+- **C, pipeline** (`…-C-pipeline.md`): endpoint clients, the fake endpoint, alignment mapping, cache,
+  build orchestration, assembly, captions, the CLI, doctor, setup and the CI job. Covers stage 4 and
+  the CI part of 9.
+- **D, publish and bake-off** (`…-D-publish-bakeoff.md`): manifest, local/S3 publish, the stale-build
+  check, and `vidgen bakeoff` with its candidate list. Covers stages 6–7 and ends at the listening stop.
+- **E, skill and docs** (`…-E-skill-docs.md`): the `vidgen-authoring` skill, the DNS example, README,
+  `vidgen/CLAUDE.md` and the acceptance runs. Covers stages 8–9 and §16.
 
 ## 16. Acceptance
 
