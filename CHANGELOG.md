@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/Galvill/TeachMe/compare/v1.1.0...v1.2.0) (2026-10-19)
+
+
+### Features
+
+* **cli:** add --host flag to choose the listen address ([#39](https://github.com/Galvill/TeachMe/issues/39)) ([d439404](https://github.com/Galvill/TeachMe/commit/d43940454c412415dfe01cd40845f1ebdebd1370)), closes [#37](https://github.com/Galvill/TeachMe/issues/37)
+
+
+### Documentation
+
+* update dogfood course for integration/issues-2026-09-24 ([#40](https://github.com/Galvill/TeachMe/issues/40)) ([0bd7b19](https://github.com/Galvill/TeachMe/commit/0bd7b1900887e850724e642001f7536fe8f862a7)), closes [#37](https://github.com/Galvill/TeachMe/issues/37)
+
 ## [1.1.0](https://github.com/Galvill/TeachMe/compare/v1.0.1...v1.1.0) (2026-09-24)
 
 
