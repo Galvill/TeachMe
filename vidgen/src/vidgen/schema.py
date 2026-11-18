@@ -30,8 +30,22 @@ AT_RE = re.compile(
 ACTIONS = ("send", "highlight", "show", "hide", "badge", "group", "text", "code")
 SCENE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
-# Issue templates for the cross-reference rules, keyed by rule.
+# Every issue template this module reports, keyed by rule. `reference/format.md` in the
+# vidgen-authoring skill documents each one; `tests/test_skill.py` keeps the two in step.
 MESSAGES: dict[str, str] = {
+    # loading
+    "read_error": "{file}: {error}",
+    "invalid_yaml": "{file}: invalid YAML: {error}",
+    "not_mapping": "a script must be a YAML mapping with title and scenes",
+    "unknown_field": "unknown field",
+    # field rules
+    "at_grammar": 'at "{value}" must be scene_start, @cue:<word>[#n] or +<seconds>, with an optional +/- offset',
+    "at_rel_offset": 'at "{value}": a relative at (+N) can\'t have an offset',
+    "at_quoted": 'at must be a quoted string, e.g. "+{value}"',
+    "one_action": "a step needs exactly one action ({actions}); found {found}",
+    "layout_kind": "layout needs exactly one of row, column or grid",
+    "commit_quoted": "syncedCommit must be a quoted string",
+    # cross-reference rules
     "unknown_node": 'unknown node "{node}"',
     "unknown_target": 'unknown node or element "{node}"',
     "duplicate_element": 'duplicate element id "{id}"',
@@ -45,6 +59,10 @@ MESSAGES: dict[str, str] = {
     "no_position": 'node "{node}" has no at and is not in layout',
     "line_range": "line {line} is out of range (the code has {count} lines)",
 }
+
+
+def _msg(rule: str, **kw: Any) -> str:
+    return MESSAGES[rule].format(**kw)
 
 
 @dataclass(frozen=True)
@@ -81,11 +99,11 @@ class At:
 def parse_at(value: str) -> At:
     m = AT_RE.match(value)
     if m is None:
-        raise ValueError(f'at "{value}" must be scene_start, @cue:<word>[#n] or +<seconds>, with an optional +/- offset')
+        raise ValueError(_msg("at_grammar", value=value))
     off = float(m["off"]) if m["off"] else 0.0
     if m["rel"] is not None:
         if m["off"]:
-            raise ValueError(f'at "{value}": a relative at (+N) can\'t have an offset')
+            raise ValueError(_msg("at_rel_offset", value=value))
         return At(kind="rel", rel=float(m["rel"]))
     if m["name"] is not None:
         return At(kind="cue", name=m["name"], occurrence=int(m["n"]) if m["n"] else None, offset=off)
@@ -185,7 +203,7 @@ class Layout(_Model):
     def _one_kind(self) -> "Layout":
         kinds = [k for k in ("row", "column", "grid") if getattr(self, k) is not None]
         if len(kinds) != 1:
-            raise ValueError("layout needs exactly one of row, column or grid")
+            raise ValueError(_msg("layout_kind"))
         return self
 
     def names(self) -> list[tuple[str, str]]:
@@ -224,7 +242,7 @@ class Step(_Model):
     @classmethod
     def _at_string(cls, v: Any) -> Any:
         if isinstance(v, (int, float)) and not isinstance(v, bool):
-            raise ValueError(f'at must be a quoted string, e.g. "+{v}"')
+            raise ValueError(_msg("at_quoted", value=v))
         return v
 
     @field_validator("at")
@@ -238,7 +256,7 @@ class Step(_Model):
         found = [a for a in ACTIONS if getattr(self, a) is not None]
         if len(found) != 1:
             got = ", ".join(found) if found else "none"
-            raise ValueError(f"a step needs exactly one action ({', '.join(ACTIONS)}); found {got}")
+            raise ValueError(_msg("one_action", actions=", ".join(ACTIONS), found=got))
         return self
 
     @property
@@ -277,7 +295,7 @@ class Script(_Model):
     @classmethod
     def _quoted_commit(cls, v: Any) -> Any:
         if isinstance(v, (int, float)) and not isinstance(v, bool):
-            raise ValueError("syncedCommit must be a quoted string")
+            raise ValueError(_msg("commit_quoted"))
         return v
 
     def scene(self, scene_id: str) -> Scene:
@@ -311,7 +329,7 @@ def _loc_path(raw: Any, loc: tuple[Any, ...]) -> str:
 
 def _message(err: Any) -> str:
     if err["type"] == "extra_forbidden":
-        return "unknown field"
+        return _msg("unknown_field")
     msg = str(err["msg"])
     return msg.removeprefix("Value error, ")
 
@@ -325,9 +343,9 @@ def _read_yaml(path: Path) -> Any:
     try:
         return yaml.load(path.read_text(encoding="utf-8"))
     except OSError as e:
-        raise ScriptError([Issue("", f"{path}: {e.strerror or e}")]) from None
+        raise ScriptError([Issue("", _msg("read_error", file=path, error=e.strerror or e))]) from None
     except YAMLError as e:
-        raise ScriptError([Issue("", f"{path.name}: invalid YAML: {e}")]) from None
+        raise ScriptError([Issue("", _msg("invalid_yaml", file=path.name, error=e))]) from None
 
 
 def default_slug(path: Path) -> str:
@@ -346,7 +364,7 @@ def load_script(path: Path) -> Script:
     path = Path(path)
     raw = _read_yaml(path)
     if not isinstance(raw, dict):
-        raise ScriptError([Issue("", "a script must be a YAML mapping with title and scenes")])
+        raise ScriptError([Issue("", _msg("not_mapping"))])
     data = dict(raw)
     data.setdefault("slug", default_slug(path))
     try:
@@ -395,10 +413,6 @@ def effective_diagrams(script: Script) -> list[tuple[dict[str, Node], Layout | N
             layout = scene.diagram.layout
         out.append((nodes, layout))
     return out
-
-
-def _msg(rule: str, **kw: Any) -> str:
-    return MESSAGES[rule].format(**kw)
 
 
 def _check_cues(base: str, scene: Scene, narration: Narration) -> list[Issue]:
