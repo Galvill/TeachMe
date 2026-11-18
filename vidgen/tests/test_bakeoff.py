@@ -4,10 +4,10 @@ import wave
 from typer.testing import CliRunner
 
 from vidgen.align import AsrWord, matched_tokens
-from vidgen.bakeoff import COLUMNS, DEFAULT_PASSAGE, Row, load_passage, results_table, run_bakeoff
+from vidgen.bakeoff import COLUMNS, DEFAULT_PASSAGE, Row, _cue_score, load_passage, results_table, run_bakeoff
 from vidgen.cli import app
 from vidgen.config import Config, Endpoint, EndpointSet
-from vidgen.narration import parse_narration, to_spoken
+from vidgen.narration import norm, parse_narration, to_spoken
 
 runner = CliRunner()
 CUES = ["DNS", "TTL", "TLD", "nginx", "example.com", "IPv6", "93.184.216.34"]
@@ -124,7 +124,25 @@ def test_matched_tokens():
     n = parse_narration("Ask DNS for example.com now")
     spoken = to_spoken(n, {"DNS": "D N S", "example.com": "example dot com"})
     assert spoken.tokens == ["Ask", "D", "N", "S", "for", "example", "dot", "com", "now"]
+    # The ASR writes "DNS" in its written form; the whole D N S group matches it.
     heard = ["ask", "dns", "for", "example", "dot", "com", "now"]
     asr = [AsrWord(w, i * 0.3, i * 0.3 + 0.2) for i, w in enumerate(heard)]
-    assert matched_tokens(asr, spoken) == [True, False, False, False, True, True, True, True, True]
-    assert matched_tokens([], spoken) == [False] * 9
+    assert matched_tokens(asr, spoken, n) == [True] * 9
+    # A heard word that is neither the spoken nor the written form still doesn't match.
+    heard = ["ask", "dennis", "for", "example.com", "now"]
+    asr = [AsrWord(w, i * 0.3, i * 0.3 + 0.2) for i, w in enumerate(heard)]
+    assert matched_tokens(asr, spoken, n) == [True, False, False, False, True, True, True, True, True]
+    assert matched_tokens([], spoken, n) == [False] * 9
+
+
+def test_cue_score_written_form_asr():
+    # Whisper-style ASR writes every cue in its written form ("DNS", "nginx", "93.184.216.34").
+    p = load_passage(DEFAULT_PASSAGE)
+    spoken = to_spoken(p.narration, p.pronunciations)
+    asr = [AsrWord(w, i * 0.3, i * 0.3 + 0.25) for i, w in enumerate(p.narration.words)]
+    assert _cue_score(p, matched_tokens(asr, spoken, p.narration), spoken.source) == "7/7"
+    # Every cue gets spoken tokens through the passage dictionary, the IP address included.
+    for cue in p.cues:
+        i = p.narration.norms.index(norm(cue))
+        toks = [spoken.tokens[t] for t, src in enumerate(spoken.source) if src == i]
+        assert toks and toks != [p.narration.words[i]]
