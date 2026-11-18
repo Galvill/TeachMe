@@ -9,10 +9,8 @@ the run moves on. Nothing here picks a winner: the user listens.
 
 from __future__ import annotations
 
-import io
 import re
 import time
-import wave
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,6 +21,7 @@ from vidgen.align import aligner_from_config, matched_tokens
 from vidgen.config import Config
 from vidgen.narration import Narration, NarrationError, norm, parse_narration, to_spoken
 from vidgen.tts.engine import engine_from_config
+from vidgen.wav import parse_wav
 
 BAKEOFF_DIR = (Path(__file__).resolve().parent / ".." / ".." / "bakeoff").resolve()
 DEFAULT_PASSAGE = BAKEOFF_DIR / "passage.md"
@@ -79,14 +78,17 @@ def load_passage(path: Path) -> Passage:
 
 
 def wav_duration(data: bytes, path: Path, cfg: Config) -> float:
-    """Seconds of audio; ffprobe only when Python's ``wave`` can't read the format."""
-    try:
-        with wave.open(io.BytesIO(data)) as w:
-            return w.getnframes() / float(w.getframerate())
-    except (wave.Error, EOFError):
-        from vidgen.assemble import probe_duration
+    """Seconds of audio from the WAV's fmt chunk and the sample bytes actually present.
 
-        return probe_duration(path, cfg)
+    The header's sizes aren't trusted: streaming servers write placeholders there
+    (:mod:`vidgen.wav`). ffprobe runs only when the bytes aren't a WAV this can parse.
+    """
+    info = parse_wav(data)
+    if info is not None:
+        return info.duration
+    from vidgen.assemble import probe_duration
+
+    return probe_duration(path, cfg)
 
 
 def clip_stem(endpoint: str) -> str:
@@ -130,7 +132,7 @@ def _one(cfg: Config, p: Passage, name: str, out: Path) -> Row:
 
         if cfg.align.endpoints:
             asr = aligner_from_config(cfg).words(dict_path, language="en")
-            row.cue_aligned = _cue_score(p, matched_tokens(asr, spoken), spoken.source)
+            row.cue_aligned = _cue_score(p, matched_tokens(asr, spoken, p.narration), spoken.source)
     except Exception as e:  # one endpoint's failure never stops the bake-off
         lines = [line for line in str(e).splitlines() if line.strip()]
         row.error = lines[0] if lines else type(e).__name__

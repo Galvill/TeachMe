@@ -13,6 +13,7 @@ import httpx
 
 from vidgen.config import Endpoint
 from vidgen.tts.engine import EndpointError
+from vidgen.wav import repair_streamed
 
 ATTEMPTS = 3
 BACKOFF_S = (1.0, 2.0)  # sleep before attempt 2 and attempt 3
@@ -75,4 +76,5 @@ class OpenAIHttpEngine:
         if not data.startswith(b"RIFF"):
             ctype = resp.headers.get("content-type", "none")
             raise EndpointError(self.name, f"returned non-WAV (content-type {ctype})")
-        return data
+        # Streaming servers write placeholder sizes; fix them so every reader sees the real length.
+        return repair_streamed(data)

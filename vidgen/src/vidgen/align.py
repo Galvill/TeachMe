@@ -1,8 +1,9 @@
 """Word timestamps: the alignment endpoint client, and mapping ASR words onto script words.
 
 The ASR transcript is matched against the *spoken* tokens (after the pronunciation
-dictionary) with a sequence alignment that tolerates ASR spelling differences, then each
-original narration word takes the span of the spoken tokens it produced.
+dictionary) with a sequence alignment that tolerates ASR spelling differences, then against
+the written form of any word whose spoken tokens went unmatched ("DNS" heard for "D N S").
+Each original narration word takes the span of the spoken tokens it produced.
 """
 
 from __future__ import annotations
@@ -76,34 +77,101 @@ def aligner_from_config(cfg: Config, name: str | None = None) -> Aligner:
     return Aligner(chosen, ep)
 
 
-def _match(asr: list[AsrWord], spoken: Spoken) -> list[int | None]:
-    """For each spoken token, the index of the ASR word it aligned to, or None."""
+Span = tuple[int, int]  # first and last ASR word index, inclusive
+
+
+def _written_hit(heard: list[str], written: str, lo: int, hi: int, used: set[int]) -> Span | None:
+    """The first run of free ASR words strictly between ``lo`` and ``hi`` that joins to ``written``.
+
+    A run rather than one word because ASR splits some written forms: "example .com",
+    "93 .184 .216 .34".
+    """
+    for j in range(lo + 1, hi):
+        if j in used or not heard[j] or not written.startswith(heard[j]):
+            continue
+        acc = ""
+        for k in range(j, hi):
+            if k in used:
+                break
+            acc += heard[k]
+            if acc == written:
+                return (j, k)
+            if not written.startswith(acc):
+                break
+    return None
+
+
+def _match(asr: list[AsrWord], spoken: Spoken, n: Narration) -> list[Span | None]:
+    """For each spoken token, the span of ASR words it aligned to, or None.
+
+    Two passes. First the spoken tokens are sequence-aligned against the ASR words, one word
+    each. Then each narration word whose tokens didn't all match is tried in its written form:
+    ASR models usually write "DNS" or "nginx", not the dictionary's "D N S" or "engine x". The
+    ASR words between the group's matched neighbours that spell the written word are taken by
+    every token of the group (:func:`map_words` splits their span evenly across them).
+    """
     tokens = [norm(t) for t in spoken.tokens]
     heard = [norm(w.text) for w in asr]
-    out: list[int | None] = [None] * len(tokens)
+    out: list[Span | None] = [None] * len(tokens)
     sm = difflib.SequenceMatcher(None, tokens, heard, autojunk=False)
     for block in sm.get_matching_blocks():
         for k in range(block.size):
-            out[block.a + k] = block.b + k
+            out[block.a + k] = (block.b + k, block.b + k)
+
+    groups: dict[int, list[int]] = {}
+    for t, src in enumerate(spoken.source):
+        groups.setdefault(src, []).append(t)
+    used = {j for s in out if s is not None for j in range(s[0], s[1] + 1)}
+    for src, members in groups.items():
+        written = n.norms[src]
+        if not written or all(out[t] is not None for t in members):
+            continue
+        before = (out[t] for t in range(members[0] - 1, -1, -1))
+        after = (out[t] for t in range(members[-1] + 1, len(out)))
+        lo = next((s[1] for s in before if s is not None), -1)
+        hi = next((s[0] for s in after if s is not None), len(asr))
+        own = {j for t in members if (s := out[t]) is not None for j in range(s[0], s[1] + 1)}
+        hit = _written_hit(heard, written, lo, hi, used - own)
+        if hit is None:
+            continue
+        used -= own
+        used.update(range(hit[0], hit[1] + 1))
+        for t in members:
+            out[t] = hit
     return out
 
 
-def matched_tokens(asr: list[AsrWord], spoken: Spoken) -> list[bool]:
+def matched_tokens(asr: list[AsrWord], spoken: Spoken, n: Narration) -> list[bool]:
     """Per spoken token, whether the transcript matched it (the alignment :func:`map_words` uses)."""
-    return [j is not None for j in _match(asr, spoken)]
+    return [s is not None for s in _match(asr, spoken, n)]
 
 
 def map_words(asr: list[AsrWord], spoken: Spoken, n: Narration, duration: float) -> list[WordTime]:
     """Word times 1:1 with ``n.words``.
 
-    Matched spoken tokens take the ASR word's times; unmatched runs are spread evenly between
+    Matched spoken tokens take the ASR words' times; unmatched runs are spread evenly between
     their matched neighbours (0 and ``duration`` at the edges). Raises :class:`AlignError` when
     fewer than half the tokens match; the caller prefixes the scene id.
     """
     tokens = [norm(t) for t in spoken.tokens]
-    times: list[tuple[float, float] | None] = [
-        None if j is None else (asr[j].start, asr[j].end) for j in _match(asr, spoken)
-    ]
+    match = _match(asr, spoken, n)
+    times: list[tuple[float, float] | None] = [None] * len(match)
+    t = 0
+    while t < len(match):
+        span = match[t]
+        if span is None:
+            t += 1
+            continue
+        # Tokens sharing one ASR span (a written-form match) split it evenly.
+        k = t
+        while k < len(match) and match[k] == span:
+            k += 1
+        first, last = asr[span[0]].start, asr[span[1]].end
+        step = max(0.0, last - first) / (k - t)
+        for m in range(t, k):
+            start = first + (m - t) * step
+            times[m] = (start, start + step)
+        t = k
 
     countable = [i for i, t in enumerate(tokens) if t]
     matched = sum(1 for i in countable if times[i] is not None)
