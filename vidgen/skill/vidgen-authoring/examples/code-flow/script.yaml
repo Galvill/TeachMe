@@ -1,0 +1,53 @@
+# A two-scene code walkthrough: the code types in, then the diagram shows what it does.
+# Shape to copy when a video should show real lines of code next to the flow they drive.
+title: Cache-aside reads
+slug: code-flow
+seed: 3
+syncedCommit: "3f2a9c1"
+sources: [src/users/repo.ts]
+scenes:
+  - id: the-code
+    narration: >-
+      Here is the whole read path. It checks the cache first. Only on a miss does it
+      query the database, and then it stores the row for next time.
+    diagram:
+      nodes: {}
+    steps:
+      - at: scene_start
+        code:
+          id: get-user
+          lang: ts
+          text: |
+            async function getUser(id) {
+              const hit = await cache.get(id);
+              if (hit) return hit;
+              const row = await db.query(id);
+              await cache.set(id, row, 60);
+              return row;
+            }
+          at: [960, 500]
+          size: [820, 300]
+          typing: true
+          highlight_lines: [2, 3]
+        caption: "src/users/repo.ts"
+      - at: "@cue:database"
+        highlight: {node: get-user, color: request}
+  - id: the-flow
+    narration: >-
+      On a miss the request falls through to Postgres. The answer goes back to the
+      caller and into the cache.
+    diagram:
+      nodes:
+        api: {label: getUser, at: [480, 640], size: [240, 150]}
+        cache: {label: Redis, sub: "60 s TTL", at: [480, 260], size: [240, 150]}
+        db: {label: Postgres, at: [1400, 640], size: [240, 150]}
+    steps:
+      - at: "@cue:miss"
+        highlight: {node: cache, color: request}
+        caption: "Miss: fall through to the database"
+      - at: "@cue:falls"
+        send: {from: api, to: db, label: "query(id)", kind: request}
+      - at: "@cue:answer"
+        send: {from: db, to: api, label: "row", kind: reply}
+      - at: "@cue:cache"
+        send: {from: api, to: cache, label: "set(id, row)", kind: request}
