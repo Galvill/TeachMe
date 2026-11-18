@@ -288,8 +288,8 @@ Type errors come from pydantic with its own wording, for example `Field required
 
 | Message | Fix |
 |---|---|
-| `duplicate marker "{name}"` | Each `{marker}` name appears once per scene. |
-| `marker "{name}" has no word after it` | Move the marker before a word. |
+| `duplicate marker "{<name>}"` | Each `{marker}` name appears once per scene. |
+| `marker "{<name>}" has no word after it` | Move the marker before a word. |
 
 ## Lint
 

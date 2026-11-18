@@ -12,6 +12,9 @@ pronunciations:
   TLD: "T L D"
   TTL: "T T L"
   IPv6: "I P v6"
+  example.com: "example dot com"
+  # No entry for ".com" alone: pronunciations match the word without its leading dot, and the dot
+  # is kept, so a "com" entry would be spoken ".dot com". The TTS reads ".com" as written.
 scenes:
   - id: intro
     narration: >-

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from ruamel.yaml import YAML
 
+from vidgen.narration import NarrationError, parse_narration
 from vidgen.schema import MESSAGES, load_script
 
 ROOT = Path(__file__).parents[1]
@@ -26,6 +27,15 @@ def _frontmatter(text: str) -> dict:
 @pytest.mark.parametrize("rule", sorted(MESSAGES))
 def test_every_message_documented(rule):
     assert MESSAGES[rule] in FORMAT.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("narration", ["{m} once {m} twice", "a dangling {m}"])
+def test_narration_messages_documented(narration):
+    # These live in narration.py and print the marker with its braces: duplicate marker "{m}".
+    with pytest.raises(NarrationError) as err:
+        parse_narration(narration)
+    documented = str(err.value).replace("{m}", "{<name>}")
+    assert f"| `{documented}` |" in FORMAT.read_text(encoding="utf-8")
 
 
 def test_valid_blocks_parse(tmp_path):

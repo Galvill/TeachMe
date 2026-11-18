@@ -111,11 +111,12 @@ user; you can still write and `validate` the script without one.
 2. Re-read the current code for each change: the diff shows where to look, the code is the
    truth.
 3. Edit only the affected scenes: narration, nodes, labels, steps and `sources`. Leave
-   correct scenes byte-for-byte alone, so they come from the cache.
+   correct scenes byte-for-byte alone, so they come from the cache. In the same edit, bump
+   `syncedCommit` to the commit you checked against. The script hash covers `syncedCommit`,
+   so a bump after the build would make the new manifest stale at once.
 4. Run Create steps 6–11: validate, lint, preview the changed scenes, rebuild (only the
    changed scenes re-render), spot-check, republish.
-5. Bump `syncedCommit` to the commit you checked against, and commit the script and the new
-   manifest.
+5. Commit the script and the new manifest.
 
 ## Common mistakes
 

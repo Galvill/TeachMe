@@ -43,11 +43,11 @@ scenes:
         db: {label: Postgres, at: [1400, 640], size: [240, 150]}
     steps:
       - at: "@cue:miss"
-        send: {from: api, to: cache, label: "get(id)", kind: request}
+        highlight: {node: cache, color: request}
         caption: "Miss: fall through to the database"
       - at: "@cue:falls"
         send: {from: api, to: db, label: "query(id)", kind: request}
       - at: "@cue:answer"
         send: {from: db, to: api, label: "row", kind: reply}
       - at: "@cue:cache"
-        send: {from: api, to: cache, label: "set(id, row)", kind: answer}
+        send: {from: api, to: cache, label: "set(id, row)", kind: request}
