@@ -1,0 +1,99 @@
+# The path a DNS request takes from the browser until an IP address is resolved.
+# Six scenes, about 50 s of narration. Every node has an explicit size: "Recursive resolver"
+# overflows the default 220 x 140 box.
+title: How a DNS lookup works
+slug: dns-lookup
+voice: default
+language: en
+style: sketch-dark
+seed: 7
+pronunciations:
+  DNS: "D N S"
+  TLD: "T L D"
+  TTL: "T T L"
+  IPv6: "I P v6"
+  example.com: "example dot com"
+  # No entry for ".com" alone: pronunciations match the word without its leading dot, and the dot
+  # is kept, so a "com" entry would be spoken ".dot com". The TTS reads ".com" as written.
+scenes:
+  - id: intro
+    narration: >-
+      You type example.com into your browser. First that name has to become an IP
+      address. That is a DNS lookup.
+    diagram:
+      nodes:
+        browser: {label: Browser, sub: "own + OS cache", at: [220, 540], size: [240, 170]}
+        resolver: {label: Recursive resolver, sub: "ISP / 8.8.8.8", at: [680, 540], size: [300, 170], hidden: true}
+        root: {label: Root server, sub: "13 named roots", at: [1640, 300], size: [300, 170], hidden: true}
+        tld: {label: .com TLD server, sub: "knows .com", at: [1640, 540], size: [300, 170], hidden: true}
+        authoritative: {label: Authoritative, sub: "example.com zone", at: [1640, 780], size: [300, 170], hidden: true}
+    steps:
+      - at: "@cue:browser"
+        highlight: browser
+        caption: "example.com  ->  ?"
+      - at: "@cue:DNS"
+        show: [resolver, root, tld, authoritative]
+  - id: cache-miss
+    narration: >-
+      First the browser checks its own cache, then the operating system's. Both miss, so
+      it asks the recursive resolver, run by your provider.
+    diagram:
+      inherit: true
+    steps:
+      - at: "@cue:cache"
+        highlight: browser
+        caption: "1  Browser and OS caches miss"
+      - at: "@cue:resolver"
+        send: {from: browser, to: resolver, label: "example.com ?", kind: request}
+      - at: "+0.2"
+        highlight: resolver
+  - id: ask-root
+    narration: >-
+      The resolver starts at the top and asks a root server. It doesn't know the address,
+      but points to the .com servers.
+    diagram:
+      inherit: true
+    steps:
+      - at: "@cue:root"
+        send: {from: resolver, to: root, label: "example.com ?", kind: request}
+        caption: "2  Ask a root server"
+      - at: "@cue:points"
+        send: {from: root, to: resolver, label: "try .com", kind: reply}
+  - id: ask-tld
+    narration: >-
+      Next it asks the .com TLD server. That server doesn't have the address either, but
+      it names the authoritative server for example.com.
+    diagram:
+      inherit: true
+    steps:
+      - at: "@cue:TLD"
+        send: {from: resolver, to: tld, label: "example.com ?", kind: request}
+        caption: "3  Ask the .com TLD"
+      - at: "@cue:names"
+        send: {from: tld, to: resolver, label: "ask ns1", kind: reply}
+  - id: ask-authoritative
+    narration: >-
+      Finally it asks the authoritative server, which holds the real record. It replies
+      with the IP address, plus a TTL that says how long to keep it.
+    diagram:
+      inherit: true
+    steps:
+      - at: "@cue:authoritative"
+        send: {from: resolver, to: authoritative, label: "example.com ?", kind: request}
+        caption: "4  Ask the authoritative server"
+      - at: "@cue:replies"
+        send: {from: authoritative, to: resolver, label: "A record, TTL", kind: reply}
+  - id: answer-cached
+    narration: >-
+      The resolver hands the address back to the browser and caches it until the TTL runs
+      out. The next lookup skips every step. IPv6 addresses take the same path.
+    diagram:
+      inherit: true
+    steps:
+      - at: "@cue:hands"
+        send: {from: resolver, to: browser, label: "93.184.216.34", kind: answer}
+        caption: "5  The answer is cached until the TTL expires"
+      - at: "+0.2"
+        badge: {text: "93.184.216.34", near: browser}
+      - at: "@cue:caches"
+        highlight: resolver
