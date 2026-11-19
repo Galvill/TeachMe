@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1](https://github.com/Galvill/TeachMe/compare/v1.2.0...v1.2.1) (2026-11-19)
+
+
+### Documentation
+
+* add vidgen design spec ([0e2f887](https://github.com/Galvill/TeachMe/commit/0e2f88704130c1fe4d3a3768ca42e8e7c725987a))
+* add vidgen design spec and implementation plans ([1c29062](https://github.com/Galvill/TeachMe/commit/1c2906239ebae65d02bda0987dd5142a97a4e0f2))
+* add vidgen implementation plans A-E ([07895dc](https://github.com/Galvill/TeachMe/commit/07895dc4d26f9205fe0accb65a936c03a0b218c8))
+
 ## [1.2.0](https://github.com/Galvill/TeachMe/compare/v1.1.0...v1.2.0) (2026-10-19)
 
 
