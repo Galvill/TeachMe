@@ -61,7 +61,7 @@ scenes:
         send: {from: root, to: resolver, label: "try .com", kind: reply}
   - id: ask-tld
     narration: >-
-      Next it asks the .com TLD server. That server doesn't have the address either, but
+      Next it asks the dot com TLD server. That server doesn't have the address either, but
       it names the authoritative server for example.com.
     diagram:
       inherit: true
